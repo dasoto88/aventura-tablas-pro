@@ -6,7 +6,7 @@ import { MUNDOS, AVATARES } from "../utils/gameData";
 const MAX_REPLAYS = 2;
 
 export default function MapaPage() {
-  const { mundoActual, nivelMax, irAMundo, nombre, avatarId, monedas,
+  const { nivelMax, irAMundo, nombre, avatarId, monedas,
           modoDemo, replayCount, todosCompletados, cerrarSesion,
           sincronizarConServidor } = useGameStore();
   const [hoveredMundo, setHoveredMundo] = useState(null);
@@ -17,7 +17,7 @@ export default function MapaPage() {
   // Detectar si el admin reinició datos mientras el alumno estaba en sesión
   useEffect(() => {
     sincronizarConServidor();
-  }, []);
+  }, [sincronizarConServidor]);
 
   // Avatar se muestra en la frontera: siguiente mundo por conquistar
   const mundoFrontera = Math.min(nivelMax - 1, MUNDOS.length - 1);

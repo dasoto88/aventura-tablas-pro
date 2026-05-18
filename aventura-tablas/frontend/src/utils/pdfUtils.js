@@ -9,14 +9,6 @@ export function descargarReportePDF(rep) {
   const margen = 18;
   let y = 20;
 
-  const lineaColor = (r, g, b) => doc.setDrawColor(r, g, b);
-  const texto = (str, x, tamaño, style = "normal", color = [255,255,255]) => {
-    doc.setFontSize(tamaño);
-    doc.setFont("helvetica", style);
-    doc.setTextColor(...color);
-    doc.text(str, x, y);
-  };
-
   // ── Fondo oscuro
   doc.setFillColor(10, 14, 39);
   doc.rect(0, 0, W, 297, "F");
