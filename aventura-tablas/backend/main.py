@@ -2,11 +2,12 @@
 Aventura de Tablas Pro v3.0 — Backend SQLite completo
 Incluye: sesiones, maestros/alumnos, reportes, emails automáticos, auto-códigos
 """
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Any, Union
-import sqlite3, os, json, re, random, string, smtplib
+import sqlite3, os, json, re, random, string, smtplib, asyncio, base64, io, shutil
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -490,6 +491,75 @@ def _generar_codigo(nombre: str, tipo: str) -> str:
         slug = slug.replace(a, b)
     rand = "".join(random.choices(string.digits, k=4))
     return f"{slug}{rand}"
+
+# ─── BACKUP AUTOMÁTICO ────────────────────────────────────────
+
+def _crear_backup_bytes() -> bytes:
+    """Backup seguro de la DB usando la API nativa de SQLite."""
+    buf = io.BytesIO()
+    src = sqlite3.connect(str(DB_PATH))
+    # Escribir a un DB en memoria y luego serializar
+    mem = sqlite3.connect(":memory:")
+    src.backup(mem)
+    src.close()
+    # Exportar la DB en memoria a bytes
+    tmp_path = str(DB_PATH) + ".backup_tmp"
+    dst = sqlite3.connect(tmp_path)
+    mem.backup(dst)
+    dst.close()
+    mem.close()
+    with open(tmp_path, "rb") as f:
+        data = f.read()
+    try:
+        os.unlink(tmp_path)
+    except Exception:
+        pass
+    return data
+
+def _enviar_backup_email():
+    """Envía la DB como adjunto al correo del admin."""
+    if not BREVO_KEY:
+        print("[Backup] BREVO_API_KEY no configurado, backup omitido")
+        return
+    try:
+        datos = _crear_backup_bytes()
+        b64   = base64.b64encode(datos).decode()
+        fecha = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        total_licencias = get_db().execute("SELECT COUNT(*) as n FROM Licencias").fetchone()["n"]
+        payload = json.dumps({
+            "sender":      {"name": "Aventura de Tablas — Backup", "email": EMAIL_FROM},
+            "to":          [{"email": EMAIL_FROM}],
+            "subject":     f"🗄️ Backup BD Aventura de Tablas — {fecha}",
+            "htmlContent": f"""
+                <h2 style='color:#00f5ff'>Backup automático de la base de datos</h2>
+                <p><strong>Fecha:</strong> {fecha}</p>
+                <p><strong>Licencias registradas:</strong> {total_licencias}</p>
+                <p><strong>Tamaño:</strong> {len(datos):,} bytes</p>
+                <p style='color:#aaa'>Para restaurar: ve a tu sistema admin → <em>Importar DB</em> y sube este archivo.</p>
+            """,
+            "attachment": [{"name": f"aventura_tablas_{fecha}.db", "content": b64}],
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.brevo.com/v3/smtp/email",
+            data=payload,
+            headers={"api-key": BREVO_KEY, "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            print(f"[Backup OK] → {EMAIL_FROM} ({len(datos):,} bytes, status {resp.status})")
+    except Exception as e:
+        print(f"[Backup Error] {e}")
+
+async def _loop_backup_automatico():
+    """Envía backup cada 6 horas mientras el servidor está corriendo."""
+    await asyncio.sleep(60)          # Primer backup 1 min después de iniciar
+    while True:
+        _enviar_backup_email()
+        await asyncio.sleep(3600 * 6)  # Luego cada 6 horas
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(_loop_backup_automatico())
 
 # ─── ENDPOINTS ────────────────────────────────────────────────
 
@@ -1670,3 +1740,44 @@ def admin_estadisticas():
         }
     finally:
         conn.close()
+
+# ─── BACKUP DE BASE DE DATOS ──────────────────────────────────
+
+@app.get("/api/admin/exportar-db")
+def exportar_db(licencia: str):
+    """Descarga la base de datos completa como archivo .db"""
+    if licencia.strip() != get_admin_licencia():
+        raise HTTPException(403, "No autorizado")
+    datos = _crear_backup_bytes()
+    fecha = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    return StreamingResponse(
+        io.BytesIO(datos),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename=aventura_tablas_{fecha}.db"}
+    )
+
+@app.post("/api/admin/importar-db")
+async def importar_db(licencia: str, archivo: UploadFile = File(...)):
+    """Restaura la base de datos desde un archivo .db subido."""
+    if licencia.strip() != get_admin_licencia():
+        raise HTTPException(403, "No autorizado")
+    contenido = await archivo.read()
+    if len(contenido) < 100:
+        raise HTTPException(400, "Archivo demasiado pequeño o inválido")
+    if not contenido.startswith(b"SQLite format 3"):
+        raise HTTPException(400, "No es una base de datos SQLite válida")
+    # Guardar backup del archivo actual antes de reemplazar
+    bak = str(DB_PATH) + ".anterior"
+    shutil.copy2(str(DB_PATH), bak)
+    with open(str(DB_PATH), "wb") as f:
+        f.write(contenido)
+    total = sqlite3.connect(str(DB_PATH)).execute("SELECT COUNT(*) as n FROM Licencias").fetchone()["n"]
+    return {"ok": True, "mensaje": f"Base de datos restaurada — {total} licencias encontradas", "bytes": len(contenido)}
+
+@app.get("/api/admin/backup-ahora")
+def backup_ahora(licencia: str):
+    """Envía el backup inmediatamente por email."""
+    if licencia.strip() != get_admin_licencia():
+        raise HTTPException(403, "No autorizado")
+    _enviar_backup_email()
+    return {"ok": True, "mensaje": f"Backup enviado a {EMAIL_FROM}"}
