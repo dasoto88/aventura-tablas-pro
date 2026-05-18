@@ -627,16 +627,114 @@ body {
 }
 
 /* ─── RESPONSIVE ───────────────────────────────────────── */
-@media (max-width: 768px) {
-  .hud { padding: 8px 12px; gap: 8px; }
-  .opciones-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .mapa-container { grid-template-columns: repeat(2, 1fr); }
-  .question-number { font-size: 52px; }
-  .avatar-display { font-size: 80px; }
+
+/* Tablet (≤ 900px) */
+@media (max-width: 900px) {
+  .mapa-container { grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 16px; }
+  .btn-primary, .btn-gold { padding: 12px 24px; font-size: 15px; }
+  .btn-lg { padding: 14px 32px; font-size: 18px; }
 }
 
+/* Mobile / Tablet pequeña (≤ 768px) */
+@media (max-width: 768px) {
+  /* HUD */
+  .hud { padding: 8px 10px; gap: 6px; }
+  .hud-item { padding: 5px 10px; gap: 6px; }
+  .hud-label { font-size: 9px; }
+  .hud-value { font-size: 13px; }
+
+  /* Cards y layout */
+  .card { padding: 18px 14px; border-radius: var(--radius-md); }
+
+  /* Mapa */
+  .mapa-container { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 12px; }
+  .mundo-card { padding: 14px 10px; }
+
+  /* Juego */
+  .question-card { padding: 24px 16px; border-radius: 20px; }
+  .question-number { font-size: clamp(42px, 10vw, 72px); }
+  .opciones-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; }
+  .opcion-btn { padding: 16px 8px; font-size: clamp(20px, 5vw, 36px); border-radius: 14px; }
+  .avatar-display { font-size: 72px; }
+
+  /* Progreso / casillas */
+  .casilla { width: 30px; height: 30px; font-size: 13px; }
+  .progreso-mundo { gap: 4px; padding: 12px 0; }
+
+  /* Botones */
+  .btn-primary { padding: 12px 20px; font-size: 14px; }
+  .btn-gold { padding: 12px 24px; font-size: 16px; }
+  .btn-neon { padding: 10px 20px; font-size: 13px; }
+  .btn-lg { padding: 14px 28px; font-size: 17px; }
+  .btn-sm { padding: 6px 14px; font-size: 12px; }
+
+  /* Inputs */
+  .input { font-size: 16px; padding: 12px 14px; }
+
+  /* Tienda */
+  .item-card { padding: 14px 10px; }
+  .rareza-badge { font-size: 9px; padding: 2px 6px; }
+
+  /* Tablas en admin — scroll horizontal */
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+
+  /* Boss vita bar */
+  .boss-vita-bar { height: 18px; }
+
+  /* Demo banner */
+  .demo-banner { font-size: 11px; padding: 6px; }
+}
+
+/* Móvil pequeño (≤ 480px) */
 @media (max-width: 480px) {
-  .card { padding: 16px; }
-  .opciones-grid { gap: 8px; }
-  .opcion-btn { padding: 14px; font-size: 22px; }
+  /* Variables adaptadas */
+  :root {
+    --radius-lg: 18px;
+    --radius-md: 12px;
+  }
+
+  /* Layout base */
+  .card { padding: 14px 12px; }
+  .page { overflow-x: hidden; }
+
+  /* HUD — apilar en dos filas */
+  .hud { padding: 6px 8px; gap: 5px; }
+  .hud-item { padding: 4px 8px; }
+  .hud-value { font-size: 12px; }
+
+  /* Mapa — 2 columnas más pequeñas */
+  .mapa-container { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 8px; }
+  .mundo-card { padding: 10px 6px; }
+
+  /* Juego */
+  .question-card { padding: 20px 12px; }
+  .question-number { font-size: clamp(36px, 9vw, 60px); letter-spacing: 2px; }
+  .opciones-grid { gap: 8px; margin-top: 12px; }
+  .opcion-btn { padding: 14px 6px; font-size: clamp(18px, 5vw, 30px); border-radius: 12px; }
+  .avatar-display { font-size: 60px; }
+
+  /* Casillas más pequeñas */
+  .casilla { width: 26px; height: 26px; font-size: 11px; border-radius: 6px; }
+  .progreso-mundo { gap: 3px; padding: 10px 0; }
+
+  /* Botones táctiles — mínimo 44px de altura */
+  .btn-primary, .btn-gold, .btn-neon, .btn-danger { min-height: 44px; }
+  .btn-primary { padding: 10px 18px; font-size: 13px; }
+  .btn-gold { padding: 11px 20px; font-size: 14px; }
+  .btn-sm { padding: 8px 12px; font-size: 11px; min-height: 36px; }
+  .btn-full { font-size: 15px; }
+  .btn-lg { padding: 13px 24px; font-size: 16px; }
+
+  /* Inputs táctiles */
+  .input { font-size: 16px; padding: 12px; }
+
+  /* Tienda */
+  .item-card { padding: 12px 8px; }
+  .rareza-badge { top: 6px; right: 6px; font-size: 8px; }
+
+  /* Tip box */
+  .tip-box { font-size: 13px; padding: 12px 14px; }
+
+  /* Boss */
+  .boss-vita-bar { height: 16px; }
 }

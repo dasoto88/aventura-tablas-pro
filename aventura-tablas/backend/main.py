@@ -242,21 +242,35 @@ class ReiniciarMundos(BaseModel):
 
 # ─── EMAIL ────────────────────────────────────────────────────
 def enviar_correo(destinatario: str, asunto: str, html: str) -> bool:
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["From"]    = EMAIL_FROM
-        msg["To"]      = destinatario
-        msg["Subject"] = asunto
-        msg.attach(MIMEText(html, "html"))
-        with smtplib.SMTP("smtp.gmail.com", 587) as s:
-            s.starttls()
-            s.login(EMAIL_FROM, EMAIL_PASS)
-            s.send_message(msg)
-        print(f"[Email OK] → {destinatario}")
-        return True
-    except Exception as e:
-        print(f"[Email Error] {e}")
+    if not EMAIL_PASS:
+        print("[Email] EMAIL_PASSWORD no configurado — correo omitido")
         return False
+    msg = MIMEMultipart("alternative")
+    msg["From"]    = EMAIL_FROM
+    msg["To"]      = destinatario
+    msg["Subject"] = asunto
+    msg.attach(MIMEText(html, "html"))
+    # Intentar primero STARTTLS (587), luego SSL (465)
+    for intentar_ssl in (False, True):
+        try:
+            if intentar_ssl:
+                import ssl
+                ctx = ssl.create_default_context()
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx) as s:
+                    s.login(EMAIL_FROM, EMAIL_PASS)
+                    s.send_message(msg)
+            else:
+                with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as s:
+                    s.ehlo()
+                    s.starttls()
+                    s.ehlo()
+                    s.login(EMAIL_FROM, EMAIL_PASS)
+                    s.send_message(msg)
+            print(f"[Email OK {'SSL' if intentar_ssl else 'TLS'}] → {destinatario}")
+            return True
+        except Exception as e:
+            print(f"[Email Error {'SSL' if intentar_ssl else 'TLS'}] {e}")
+    return False
 
 # ─── TEMPLATES ────────────────────────────────────────────────
 def _base(contenido: str) -> str:
@@ -428,16 +442,13 @@ def email_progreso(nombre: str, correo: str, mundos: int, fallos_json: str,
 
 # ─── HELPERS ──────────────────────────────────────────────────
 def _generar_codigo(nombre: str, tipo: str) -> str:
-    prefijo = "MAE" if tipo == "maestro" else "ADM" if tipo == "admin" else "ALU"
     partes = re.sub(r"[^a-zA-ZáéíóúÁÉÍÓÚñÑ]", " ", nombre).split()
-    slug = partes[0][:5].upper() if partes else "USR"
-    # Quitar acentos básicos
+    slug = partes[0][:4].upper() if partes else "USR"
     for a, b in [("Á","A"),("É","E"),("Í","I"),("Ó","O"),("Ú","U"),("Ñ","N"),
                   ("á","a"),("é","e"),("í","i"),("ó","o"),("ú","u"),("ñ","n")]:
         slug = slug.replace(a, b)
-    anio = datetime.now().year
-    rand = "".join(random.choices(string.digits, k=3))
-    return f"{prefijo}-{slug}-{anio}-{rand}"
+    rand = "".join(random.choices(string.digits, k=4))
+    return f"{slug}{rand}"
 
 # ─── ENDPOINTS ────────────────────────────────────────────────
 
