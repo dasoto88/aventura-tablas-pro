@@ -53,6 +53,18 @@ export default function AdminPage() {
   const [reporteSeleccionado, setReporteSeleccionado] = useState(null);
   const printRef = useRef();
 
+  // Alta Directa (efectivo / transferencia)
+  const [altaTipo, setAltaTipo]           = useState("alumno");
+  const [altaNombre, setAltaNombre]       = useState("");
+  const [altaCorreo, setAltaCorreo]       = useState("");
+  const [altaCelular, setAltaCelular]     = useState("");
+  const [altaEscuela, setAltaEscuela]     = useState("");
+  const [altaGrado, setAltaGrado]         = useState("");
+  const [altaDeps, setAltaDeps]           = useState([{ nombre:"", correo:"", grado:"" }]);
+  const [altaTipoPago, setAltaTipoPago]   = useState("mensual");
+  const [altaLoading, setAltaLoading]     = useState(false);
+  const [altaResultado, setAltaResultado] = useState(null);
+
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
@@ -199,6 +211,30 @@ export default function AdminPage() {
     } finally { setImportando(false); importRef.current.value = ""; }
   };
 
+  const altaDirecta = async () => {
+    if (!altaNombre.trim() || !altaCorreo.trim() || !altaCelular.trim()) {
+      toast.error("Nombre, correo y celular son obligatorios"); return;
+    }
+    const esTutor = altaTipo === "maestro" || altaTipo === "padre";
+    const depsValidos = esTutor ? altaDeps.filter(d => d.nombre.trim()) : [];
+    if (esTutor && depsValidos.length === 0) {
+      toast.error(`Agrega al menos un ${altaTipo === "maestro" ? "alumno" : "hijo"}`); return;
+    }
+    setAltaLoading(true);
+    try {
+      const { data } = await axios.post(`${API}/api/admin/registrar-directo`, {
+        tipo: altaTipo, nombre: altaNombre.trim(), correo: altaCorreo.trim(),
+        celular: altaCelular.trim(), escuela: altaEscuela.trim(),
+        grado: altaGrado, dependientes: depsValidos, tipo_pago: altaTipoPago,
+      });
+      setAltaResultado(data);
+      toast.success("✅ ¡Usuario dado de alta y correo enviado!");
+      cargar();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Error al dar de alta");
+    } finally { setAltaLoading(false); }
+  };
+
   const imprimirReporte = (rep) => {
     setReporteSeleccionado(rep);
     setTimeout(() => {
@@ -316,6 +352,7 @@ ${contenido}
     { id:"licencias",       label:"🔑 Licencias" },
     { id:"maestros",        label:`🎓 Tutores${(maestros.length+padres.length) ? ` (${maestros.length+padres.length})` : ""}` },
     { id:"reportes",        label:"📊 Reportes" },
+    { id:"alta",            label:"💵 Alta Directa" },
     { id:"crear",           label:"➕ Nueva" },
     { id:"solicitudes",     label:`📨 Solicitudes${pendientes ? ` (${pendientes})` : ""}` },
     { id:"grupos",          label:`👥 Grupos${pendientesGrupo ? ` (${pendientesGrupo})` : ""}` },
@@ -879,6 +916,174 @@ ${contenido}
               );
             })}
           </div>
+        )}
+
+        {/* ─── TAB ALTA DIRECTA ───────────────────────────────── */}
+        {!loading && tab === "alta" && (
+          <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}}
+            className="card" style={{ background:"rgba(5,8,30,0.95)", maxWidth:540, margin:"0 auto" }}>
+
+            {altaResultado ? (
+              /* ── Resultado exitoso ── */
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontSize:56, marginBottom:8 }}>🎉</div>
+                <h3 style={{ fontFamily:"Orbitron,monospace", color:"#39ff14", fontSize:15, marginBottom:4 }}>¡Alta completada!</h3>
+                <p style={{ fontFamily:"Nunito,sans-serif", color:"rgba(255,255,255,0.5)", fontSize:13, marginBottom:20 }}>
+                  Se activaron las licencias y se enviaron los correos automáticamente.
+                </p>
+                {/* Licencia principal */}
+                <div style={{ background:"rgba(57,255,20,0.08)", border:"1px solid rgba(57,255,20,0.3)", borderRadius:14, padding:"16px 20px", marginBottom:12, textAlign:"left" }}>
+                  <div style={{ fontFamily:"Nunito,sans-serif", fontSize:11, color:"rgba(255,255,255,0.4)", marginBottom:4, textTransform:"uppercase", letterSpacing:1 }}>
+                    {altaTipo === "alumno" ? "Licencia del alumno" : altaTipo === "maestro" ? "Licencia del maestro" : "Licencia del padre"}
+                  </div>
+                  <div style={{ fontFamily:"Orbitron,monospace", fontSize:18, color:"#39ff14", letterSpacing:2, fontWeight:700 }}>{altaResultado.licencia}</div>
+                  <div style={{ fontFamily:"Nunito,sans-serif", fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:4 }}>Vence: {altaResultado.fecha_vence}</div>
+                </div>
+                {/* Licencias dependientes */}
+                {altaResultado.dependientes?.length > 0 && (
+                  <div style={{ textAlign:"left" }}>
+                    <div style={{ fontFamily:"Nunito,sans-serif", fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:8, textTransform:"uppercase", letterSpacing:1 }}>
+                      Licencias de {altaTipo === "maestro" ? "alumnos" : "hijos"}:
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      {altaResultado.dependientes.map((d, i) => (
+                        <div key={i} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <div style={{ fontFamily:"Nunito,sans-serif", fontSize:13, color:"rgba(255,255,255,0.7)" }}>{d.nombre}</div>
+                          <div style={{ fontFamily:"Orbitron,monospace", fontSize:12, color:"#a29bfe", letterSpacing:1 }}>{d.licencia}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <button className="btn btn-primary btn-full" style={{ marginTop:20 }}
+                  onClick={() => { setAltaResultado(null); setAltaNombre(""); setAltaCorreo(""); setAltaCelular(""); setAltaEscuela(""); setAltaGrado(""); setAltaDeps([{nombre:"",correo:"",grado:""}]); setAltaTipoPago("mensual"); }}>
+                  ➕ Dar de alta a otro usuario
+                </button>
+              </div>
+            ) : (
+              /* ── Formulario ── */
+              <>
+                <h3 style={{ fontFamily:"Orbitron,monospace", color:"#FFD700", marginBottom:4, fontSize:15 }}>💵 Alta Directa</h3>
+                <p style={{ fontFamily:"Nunito,sans-serif", color:"rgba(255,255,255,0.4)", fontSize:12, marginBottom:20 }}>
+                  Para pagos en efectivo o transferencia. Se activa y envía el correo al instante.
+                </p>
+                <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+
+                  {/* Tipo */}
+                  <div>
+                    <label style={{ fontFamily:"Nunito,sans-serif", fontSize:13, color:"rgba(255,255,255,0.5)", display:"block", marginBottom:6 }}>Tipo de usuario</label>
+                    <div style={{ display:"flex", gap:8 }}>
+                      {[{v:"alumno",l:"🧒 Alumno"},{v:"maestro",l:"🎓 Maestro"},{v:"padre",l:"👨‍👩‍👧 Padre"}].map(o => (
+                        <button key={o.v} onClick={() => setAltaTipo(o.v)} style={{
+                          flex:1, padding:"10px 4px", borderRadius:10, border:`1px solid ${altaTipo===o.v?"rgba(0,245,255,0.6)":"rgba(255,255,255,0.1)"}`,
+                          background: altaTipo===o.v ? "rgba(0,245,255,0.12)" : "rgba(255,255,255,0.04)",
+                          color: altaTipo===o.v ? "#00f5ff" : "rgba(255,255,255,0.4)",
+                          fontFamily:"Nunito,sans-serif", fontSize:12, fontWeight:700, cursor:"pointer",
+                        }}>{o.l}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Datos principales */}
+                  {[
+                    { val:altaNombre, set:setAltaNombre, label:"Nombre completo *", ph:"Nombre del alumno/maestro/padre", type:"text" },
+                    { val:altaCorreo, set:setAltaCorreo, label:"Correo electrónico *", ph:"correo@ejemplo.com (se envía la licencia)", type:"email" },
+                    { val:altaCelular, set:setAltaCelular, label:"Celular *", ph:"10 dígitos", type:"tel" },
+                  ].map(({ val, set, label, ph, type }) => (
+                    <div key={label}>
+                      <label style={{ fontFamily:"Nunito,sans-serif", fontSize:13, color:"rgba(255,255,255,0.5)", display:"block", marginBottom:6 }}>{label}</label>
+                      <input className="input" placeholder={ph} value={val} onChange={e => set(e.target.value)} type={type} />
+                    </div>
+                  ))}
+
+                  {/* Grado / Escuela */}
+                  {altaTipo === "alumno" && (
+                    <div>
+                      <label style={{ fontFamily:"Nunito,sans-serif", fontSize:13, color:"rgba(255,255,255,0.5)", display:"block", marginBottom:6 }}>Grado escolar</label>
+                      <select value={altaGrado} onChange={e => setAltaGrado(e.target.value)} className="input" style={{ cursor:"pointer" }}>
+                        <option value="">— Seleccionar grado —</option>
+                        {["1° Primaria","2° Primaria","3° Primaria","4° Primaria","5° Primaria","6° Primaria","1° Secundaria","2° Secundaria","3° Secundaria"].map(g =>
+                          <option key={g} value={g}>{g}</option>
+                        )}
+                      </select>
+                    </div>
+                  )}
+                  {(altaTipo === "maestro" || altaTipo === "padre") && (
+                    <div>
+                      <label style={{ fontFamily:"Nunito,sans-serif", fontSize:13, color:"rgba(255,255,255,0.5)", display:"block", marginBottom:6 }}>
+                        {altaTipo === "maestro" ? "Grado / salón que imparte" : "Escuela (opcional)"}
+                      </label>
+                      <input className="input" placeholder={altaTipo === "maestro" ? "ej: 2° A Primaria" : "ej: Escuela Benito Juárez"} value={altaEscuela} onChange={e => setAltaEscuela(e.target.value)} />
+                    </div>
+                  )}
+
+                  {/* Tipo de pago */}
+                  {(altaTipo === "maestro" || altaTipo === "padre") && (
+                    <div>
+                      <label style={{ fontFamily:"Nunito,sans-serif", fontSize:13, color:"rgba(255,255,255,0.5)", display:"block", marginBottom:6 }}>Tipo de pago</label>
+                      <div style={{ display:"flex", gap:8 }}>
+                        {[{v:"mensual",l:"📅 Mensual (30 días)"},{v:"unico",l:"🏆 Pago único (5 meses)"}].map(o => (
+                          <button key={o.v} onClick={() => setAltaTipoPago(o.v)} style={{
+                            flex:1, padding:"10px 4px", borderRadius:10,
+                            border:`1px solid ${altaTipoPago===o.v?"rgba(255,214,0,0.6)":"rgba(255,255,255,0.1)"}`,
+                            background: altaTipoPago===o.v ? "rgba(255,214,0,0.1)" : "rgba(255,255,255,0.04)",
+                            color: altaTipoPago===o.v ? "#FFD700" : "rgba(255,255,255,0.4)",
+                            fontFamily:"Nunito,sans-serif", fontSize:11, fontWeight:700, cursor:"pointer",
+                          }}>{o.l}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dependientes */}
+                  {(altaTipo === "maestro" || altaTipo === "padre") && (
+                    <div>
+                      <label style={{ fontFamily:"Nunito,sans-serif", fontSize:13, color:"rgba(255,255,255,0.5)", display:"block", marginBottom:8 }}>
+                        {altaTipo === "maestro" ? "Alumnos" : "Hijos"} ({altaDeps.filter(d=>d.nombre.trim()).length} registrados)
+                      </label>
+                      <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:300, overflowY:"auto" }}>
+                        {altaDeps.map((dep, i) => (
+                          <div key={i} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, padding:"10px 12px" }}>
+                            <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
+                              <span style={{ fontFamily:"Nunito,sans-serif", fontSize:11, color:"rgba(255,255,255,0.3)", minWidth:20 }}>#{i+1}</span>
+                              <input className="input" placeholder="Nombre *" value={dep.nombre}
+                                onChange={e => setAltaDeps(p => p.map((d,idx) => idx===i ? {...d,nombre:e.target.value} : d))}
+                                style={{ flex:2, padding:"8px 10px", fontSize:13 }} />
+                              {altaDeps.length > 1 && (
+                                <button onClick={() => setAltaDeps(p => p.filter((_,idx)=>idx!==i))}
+                                  style={{ background:"rgba(255,0,110,0.15)", border:"1px solid rgba(255,0,110,0.3)", color:"#ff006e", borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:14 }}>✕</button>
+                              )}
+                            </div>
+                            <div style={{ display:"flex", gap:6 }}>
+                              <input className="input" placeholder="Correo (opcional)" value={dep.correo}
+                                onChange={e => setAltaDeps(p => p.map((d,idx) => idx===i ? {...d,correo:e.target.value} : d))}
+                                style={{ flex:3, padding:"7px 10px", fontSize:12 }} type="email" />
+                              <input className="input" placeholder="Grado" value={dep.grado}
+                                onChange={e => setAltaDeps(p => p.map((d,idx) => idx===i ? {...d,grado:e.target.value} : d))}
+                                style={{ flex:2, padding:"7px 10px", fontSize:12 }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={() => setAltaDeps(p => [...p, {nombre:"",correo:"",grado:""}])}
+                        style={{ marginTop:8, width:"100%", background:"rgba(0,245,255,0.06)", border:"1px dashed rgba(0,245,255,0.3)", color:"#00f5ff", borderRadius:10, padding:"10px", cursor:"pointer", fontFamily:"Nunito,sans-serif", fontSize:13 }}>
+                        ➕ Agregar {altaTipo === "maestro" ? "alumno" : "hijo"}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="tip-box" style={{ fontSize:12 }}>
+                    💡 Se generará el código automáticamente, se activará al instante y se enviará por correo a <strong>{altaCorreo || "el usuario"}</strong>{altaTipo !== "alumno" ? " y a cada alumno/hijo con correo" : ""}.
+                  </div>
+
+                  <button className="btn btn-primary btn-full" style={{ padding:16, fontSize:15, marginTop:4 }}
+                    onClick={altaDirecta} disabled={altaLoading}>
+                    {altaLoading ? "⏳ Procesando..." : "✅ DAR DE ALTA Y ACTIVAR"}
+                  </button>
+                </div>
+              </>
+            )}
+          </motion.div>
         )}
 
         {/* ─── TAB CONFIG ─────────────────────────────────────── */}

@@ -348,6 +348,16 @@ class BloquearLicencia(BaseModel):
     codigo: str
     bloqueado: bool
 
+class RegistroDirecto(BaseModel):
+    tipo: str                          # alumno | maestro | padre
+    nombre: str
+    correo: str
+    celular: str
+    escuela: Optional[str] = ""
+    grado: Optional[str] = ""
+    dependientes: List[Any] = []
+    tipo_pago: Optional[str] = "mensual"  # mensual | unico
+
 class ReiniciarMundos(BaseModel):
     licencia: str
     mundos: Optional[List[Any]] = None
@@ -1126,8 +1136,7 @@ async def activar_licencia(data: AccionLicencia, bg: BackgroundTasks):
         nombre = lic["Nombre"] or "Aventurero"
         enviado = False
 
-        if correo and EMAIL_PASS:
-            # Buscar maestro si tiene
+        if correo:
             maestro_nombre, grado_maestro = "", ""
             if lic["Maestro_Licencia"]:
                 mae = conn.execute(
@@ -1137,7 +1146,6 @@ async def activar_licencia(data: AccionLicencia, bg: BackgroundTasks):
                 if mae:
                     maestro_nombre = mae["Nombre"] or ""
                     grado_maestro  = mae["Grado"] or lic["Grado"] or ""
-
             bg.add_task(
                 enviar_correo, correo,
                 "✅ Aventura de Tablas — ¡Tu cuenta está activa!",
@@ -1744,7 +1752,7 @@ async def activar_grupo(data: ActivarGrupo, bg: BackgroundTasks):
             dependientes_activados.append({
                 "nombre": dep_nombre, "licencia": dep_lic, "vence": fecha_vence
             })
-            if dep_correo and EMAIL_PASS:
+            if dep_correo:
                 bg.add_task(
                     enviar_correo, dep_correo,
                     "✅ Aventura de Tablas — ¡Tu cuenta está activa!",
@@ -1753,7 +1761,7 @@ async def activar_grupo(data: ActivarGrupo, bg: BackgroundTasks):
 
         conn.commit()
 
-        if sol["Tutor_Correo"] and EMAIL_PASS:
+        if sol["Tutor_Correo"]:
             bg.add_task(
                 enviar_correo, sol["Tutor_Correo"],
                 "✅ Aventura de Tablas — ¡Grupo activado!",
@@ -1790,6 +1798,96 @@ def bloquear_licencia_endpoint(data: BloquearLicencia):
             )
         conn.commit()
         return {"ok": True}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    finally:
+        conn.close()
+
+# ─── ADMIN — ALTA DIRECTA (efectivo / transferencia) ─────────
+@app.post("/api/admin/registrar-directo")
+async def registrar_directo(data: RegistroDirecto, bg: BackgroundTasks):
+    """Da de alta y activa inmediatamente a un usuario (o grupo) sin pasar por MP."""
+    if not data.nombre.strip() or not data.correo.strip() or not data.celular.strip():
+        raise HTTPException(400, "Nombre, correo y celular son obligatorios")
+    if data.tipo not in ("alumno", "maestro", "padre"):
+        raise HTTPException(400, "Tipo debe ser alumno, maestro o padre")
+
+    es_tutor = data.tipo in ("maestro", "padre")
+    dias = 150 if data.tipo_pago == "unico" else 30
+    fecha_vence = (datetime.now() + timedelta(days=dias)).strftime("%d/%m/%Y")
+
+    conn = get_db()
+    try:
+        # Generar licencia del usuario/tutor
+        tutor_lic = ""
+        for _ in range(10):
+            c = _generar_codigo(data.nombre, data.tipo)
+            if not conn.execute("SELECT id FROM Licencias WHERE Licencia=?", (c,)).fetchone():
+                tutor_lic = c; break
+        if not tutor_lic:
+            raise HTTPException(500, "No se pudo generar un código único")
+
+        conn.execute("""
+            INSERT OR IGNORE INTO Licencias
+            (Licencia,Activa,Tipo,Nombre,Correo,Celular,Grado,Fecha_Vence)
+            VALUES (?,?,?,?,?,?,?,?)
+        """, (tutor_lic, "SI", data.tipo, data.nombre.strip(),
+              data.correo.strip(), data.celular.strip(),
+              data.grado or data.escuela or "", fecha_vence))
+
+        dependientes_activados = []
+
+        if es_tutor:
+            for dep in data.dependientes:
+                dep_nombre = (dep.get("nombre","") if isinstance(dep, dict) else str(dep)).strip()
+                dep_correo = dep.get("correo","") if isinstance(dep, dict) else ""
+                dep_grado  = dep.get("grado","") if isinstance(dep, dict) else ""
+                if not dep_nombre:
+                    continue
+                dep_lic = ""
+                for _ in range(10):
+                    c = _generar_codigo(dep_nombre, "alumno")
+                    if not conn.execute("SELECT id FROM Licencias WHERE Licencia=?", (c,)).fetchone():
+                        dep_lic = c; break
+                conn.execute("""
+                    INSERT OR IGNORE INTO Licencias
+                    (Licencia,Activa,Tipo,Nombre,Correo,Grado,Maestro_Licencia,Fecha_Vence)
+                    VALUES (?,?,?,?,?,?,?,?)
+                """, (dep_lic, "SI", "alumno", dep_nombre, dep_correo,
+                      dep_grado, tutor_lic, fecha_vence))
+                dependientes_activados.append({"nombre": dep_nombre, "licencia": dep_lic, "vence": fecha_vence})
+                if dep_correo:
+                    bg.add_task(enviar_correo, dep_correo,
+                        "✅ ¡Tu licencia de Aventura de Tablas está lista!",
+                        email_activacion(dep_nombre, dep_lic, fecha_vence,
+                                         data.nombre if data.tipo == "maestro" else "", dep_grado))
+                gs_guardar_licencia(dep_lic)
+
+        conn.commit()
+
+        if not es_tutor:
+            if data.correo:
+                bg.add_task(enviar_correo, data.correo,
+                    "✅ ¡Tu licencia de Aventura de Tablas está lista!",
+                    email_activacion(data.nombre, tutor_lic, fecha_vence, "", data.grado or ""))
+        else:
+            if data.correo:
+                bg.add_task(enviar_correo, data.correo,
+                    f"✅ ¡{'Grupo' if data.tipo == 'maestro' else 'Familia'} activado! Todas las licencias",
+                    email_activacion_grupo(data.nombre, data.tipo, tutor_lic,
+                                           fecha_vence, dependientes_activados, data.tipo_pago or "mensual"))
+
+        gs_guardar_licencia(tutor_lic)
+
+        return {
+            "ok": True,
+            "licencia": tutor_lic,
+            "dependientes": dependientes_activados,
+            "fecha_vence": fecha_vence,
+            "correo_enviado": bool(data.correo),
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, str(e))
     finally:
