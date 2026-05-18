@@ -1,0 +1,415 @@
+// ============================================================
+//  AVENTURA DE TABLAS PRO — DATOS DEL JUEGO
+// ============================================================
+
+export const DEMO_DURACION = 180; // segundos
+
+// ─── AVATARES ────────────────────────────────────────────────
+export const AVATARES = [
+  {
+    id: "leo",
+    nombre: "Leo el Valiente",
+    emoji: "🦁",
+    descripcion: "Rey de la selva. ¡Rugido de victoria!",
+    color: "#FFB347",
+    colorSecundario: "#FF8C00",
+    estrellas: 5,
+    habilidad: "Doble monedas en mundos de fuego",
+    para: "niños",
+    css: "avatar-leo",
+  },
+  {
+    id: "luna",
+    nombre: "Luna la Maga",
+    emoji: "🦊",
+    descripcion: "Zorra mágica del bosque encantado",
+    color: "#FF6B6B",
+    colorSecundario: "#C0392B",
+    estrellas: 4,
+    habilidad: "Pistas mágicas en momentos difíciles",
+    para: "niñas",
+    css: "avatar-luna",
+  },
+  {
+    id: "bolt",
+    nombre: "Bolt el Robot",
+    emoji: "🤖",
+    descripcion: "Robot súper calculador del futuro",
+    color: "#74B9FF",
+    colorSecundario: "#0984E3",
+    estrellas: 4,
+    habilidad: "Calcula más rápido en el mundo Cyber",
+    para: "todos",
+    css: "avatar-bolt",
+  },
+  {
+    id: "kira",
+    nombre: "Kira la Dragona",
+    emoji: "🐲",
+    descripcion: "Dragona de cristal con poderes de hielo",
+    color: "#A29BFE",
+    colorSecundario: "#6C5CE7",
+    estrellas: 5,
+    habilidad: "Escudo de hielo — una vida extra al inicio",
+    para: "niñas",
+    css: "avatar-kira",
+    poder: { vidasExtra: 1 },
+  },
+  {
+    id: "rex",
+    nombre: "Rex el Dino",
+    emoji: "🦖",
+    descripcion: "Tiranosaurio astronauta del espacio",
+    color: "#55EFC4",
+    colorSecundario: "#00B894",
+    estrellas: 3,
+    habilidad: "Súper salto — esquiva un error al inicio",
+    para: "todos",
+    css: "avatar-rex",
+    poder: { escudo: true },
+  },
+  {
+    id: "sol",
+    nombre: "Sol la Unicornio",
+    emoji: "🦄",
+    descripcion: "Unicornio arcoíris con magia estelar",
+    color: "#FD79A8",
+    colorSecundario: "#E84393",
+    estrellas: 5,
+    habilidad: "Monedas arcoíris — +5 coins por acierto",
+    para: "niñas",
+    css: "avatar-sol",
+    poder: { bonusMonedas: 5 },
+  },
+];
+
+// ─── MUNDOS ──────────────────────────────────────────────────
+export const MUNDOS = [
+  {
+    id: 0, nombre: "Bosque Mágico", tabla: 1,
+    boss: { num1: 7, num2: 3 }, color: "#2ECC71", colorOscuro: "#1a8a4a",
+    bg: "linear-gradient(160deg, #0a3d1e 0%, #1a6b35 50%, #2ECC71 100%)",
+    emoji: "🌲", bossEmoji: "🐗", bossNombre: "Jabalí Furioso", bossVida: 3,
+    premio: 100, descripcion: "El bosque esconde secretos multiplicados",
+    desafio: "Tabla del 1 — ¡La más fácil!", monedas_por_acierto: 10, tiempo_limite: null,
+  },
+  {
+    id: 1, nombre: "Desierto Ardiente", tabla: 2,
+    boss: { num1: 8, num2: 4 }, color: "#F39C12", colorOscuro: "#9a6009",
+    bg: "linear-gradient(160deg, #4a2000 0%, #8B4513 50%, #F39C12 100%)",
+    emoji: "🏜️", bossEmoji: "🦂", bossNombre: "Escorpión Gigante", bossVida: 4,
+    premio: 120, descripcion: "El calor no perdona errores",
+    desafio: "Tabla del 2 — ¡Suma doble!", monedas_por_acierto: 12, tiempo_limite: 30,
+  },
+  {
+    id: 2, nombre: "Montaña Helada", tabla: 3,
+    boss: { num1: 9, num2: 6 }, color: "#3498DB", colorOscuro: "#1a5276",
+    bg: "linear-gradient(160deg, #0a1929 0%, #1a3d5c 50%, #3498DB 100%)",
+    emoji: "🏔️", bossEmoji: "🐻‍❄️", bossNombre: "Oso Polar Monstruoso", bossVida: 4,
+    premio: 150, descripcion: "Cada paso en el hielo es un cálculo",
+    desafio: "Tabla del 3 — ¡Triple poder!", monedas_por_acierto: 15, tiempo_limite: 25,
+  },
+  {
+    id: 3, nombre: "Volcán Infernal", tabla: 4,
+    boss: { num1: 7, num2: 8 }, color: "#E74C3C", colorOscuro: "#7b241c",
+    bg: "linear-gradient(160deg, #1a0000 0%, #6b0000 50%, #E74C3C 100%)",
+    emoji: "🌋", bossEmoji: "🐉", bossNombre: "Dragón de Lava", bossVida: 5,
+    premio: 180, descripcion: "La lava no espera respuestas lentas",
+    desafio: "Tabla del 4 — ¡Fuerza cuádruple!", monedas_por_acierto: 18, tiempo_limite: 20,
+  },
+  {
+    id: 4, nombre: "Océano Profundo", tabla: 5,
+    boss: { num1: 6, num2: 9 }, color: "#1ABC9C", colorOscuro: "#0e6655",
+    bg: "linear-gradient(160deg, #001a1a 0%, #003d3d 50%, #1ABC9C 100%)",
+    emoji: "🌊", bossEmoji: "🦑", bossNombre: "Kraken Matemático", bossVida: 5,
+    premio: 200, descripcion: "Las profundidades guardan la tabla del 5",
+    desafio: "Tabla del 5 — ¡Mitad fácil!", monedas_por_acierto: 20, tiempo_limite: 20,
+  },
+  {
+    id: 5, nombre: "Cielo Tormentoso", tabla: 6,
+    boss: { num1: 8, num2: 7 }, color: "#9B59B6", colorOscuro: "#4a235a",
+    bg: "linear-gradient(160deg, #0a001a 0%, #2e0050 50%, #9B59B6 100%)",
+    emoji: "⛈️", bossEmoji: "🌩️", bossNombre: "Tormenta Viva", bossVida: 6,
+    premio: 220, descripcion: "Los relámpagos no perdonan",
+    desafio: "Tabla del 6 — ¡La del desafío!", monedas_por_acierto: 22, tiempo_limite: 18,
+  },
+  {
+    id: 6, nombre: "Cueva de Cristal", tabla: 7,
+    boss: { num1: 9, num2: 8 }, color: "#E67E22", colorOscuro: "#784212",
+    bg: "linear-gradient(160deg, #1a0a00 0%, #5a2d0c 50%, #E67E22 100%)",
+    emoji: "💎", bossEmoji: "🕷️", bossNombre: "Araña de Diamante", bossVida: 6,
+    premio: 250, descripcion: "Los cristales reflejan tus multiplicaciones",
+    desafio: "Tabla del 7 — ¡La más difícil!", monedas_por_acierto: 25, tiempo_limite: 15,
+  },
+  {
+    id: 7, nombre: "Templo Perdido", tabla: 8,
+    boss: { num1: 7, num2: 9 }, color: "#F1C40F", colorOscuro: "#7d6608",
+    bg: "linear-gradient(160deg, #1a1500 0%, #5a4c00 50%, #F1C40F 100%)",
+    emoji: "🏛️", bossEmoji: "🗿", bossNombre: "Gólem de Piedra", bossVida: 7,
+    premio: 280, descripcion: "El templo antiguo guarda la tabla del 8",
+    desafio: "Tabla del 8 — ¡Maestro nivel!", monedas_por_acierto: 28, tiempo_limite: 15,
+  },
+  {
+    id: 8, nombre: "Castillo Oscuro", tabla: 9,
+    boss: { num1: 8, num2: 9 }, color: "#34495E", colorOscuro: "#1c2833",
+    bg: "linear-gradient(160deg, #000510 0%, #0d1b2a 50%, #34495E 100%)",
+    emoji: "🏰", bossEmoji: "🧟", bossNombre: "Rey No Muerto", bossVida: 7,
+    premio: 300, descripcion: "Las sombras del castillo multiplican el miedo",
+    desafio: "Tabla del 9 — ¡Casi leyenda!", monedas_por_acierto: 30, tiempo_limite: 12,
+  },
+  {
+    id: 9, nombre: "Dimensión Cósmica", tabla: 10,
+    boss: { num1: 9, num2: 9 }, color: "#8E44AD", colorOscuro: "#4a235a",
+    bg: "linear-gradient(160deg, #030010 0%, #1a0035 50%, #8E44AD 100%)",
+    emoji: "🌌", bossEmoji: "👾", bossNombre: "Alien Supremo", bossVida: 8,
+    premio: 500, descripcion: "El cosmos conoce la tabla del 10",
+    desafio: "Tabla del 10 — ¡La última tabla!", monedas_por_acierto: 50, tiempo_limite: 12,
+  },
+  {
+    id: 10, nombre: "MUNDO SUPREMO", tabla: 0,
+    boss: { num1: 0, num2: 0 }, color: "#FF006E", colorOscuro: "#7b0034",
+    bg: "linear-gradient(160deg, #0a0000 0%, #3d0020 30%, #FF006E 70%, #FFD700 100%)",
+    emoji: "👑", bossEmoji: "😈", bossNombre: "OMEGA — El Señor de las Tablas", bossVida: 15,
+    premio: 2000, descripcion: "El examen supremo de todas las tablas",
+    desafio: "¡Tablas del 1 al 10! ¡Solo los mejores llegan aquí!",
+    monedas_por_acierto: 100, tiempo_limite: 10, esSupremo: true,
+  },
+];
+
+// ─── TIENDA ──────────────────────────────────────────────────
+// poder: { bonusTiempo, bonusMonedas, multiplicadorMonedas, escudo,
+//           vidasExtra, danoDoble, inmortalSupremo, guardaMonedas }
+export const TIENDA_ITEMS = [
+  // ── Sombreros ──
+  { id: "gorra", emoji: "🧢", nombre: "Gorra Cool", precio: 50, tipo: "cabeza", rareza: "comun",
+    descripcion: "Una gorra azul muy chida 😎 (cosmético)",
+    poder: {} },
+  { id: "sombrero_mago", emoji: "🎩", nombre: "Sombrero del Mago", precio: 150, tipo: "cabeza", rareza: "raro",
+    descripcion: "+3 segundos en cada pregunta con tiempo ⏱️",
+    poder: { bonusTiempo: 3 } },
+  { id: "corona_plata", emoji: "🪖", nombre: "Casco Guerrero", precio: 120, tipo: "cabeza", rareza: "raro",
+    descripcion: "Escudo: absorbe 1 error sin perder vida 🛡️",
+    poder: { escudo: true } },
+  { id: "corona_oro", emoji: "👑", nombre: "Corona del Rey", precio: 300, tipo: "cabeza", rareza: "epico",
+    descripcion: "+50% monedas en todo el mundo 👑",
+    poder: { multiplicadorMonedas: 1.5 } },
+  { id: "tiara", emoji: "💍", nombre: "Tiara Mágica", precio: 250, tipo: "cabeza", rareza: "epico",
+    descripcion: "+10 monedas extras por cada acierto ✨",
+    poder: { bonusMonedas: 10 } },
+
+  // ── Armas ──
+  { id: "espada_madera", emoji: "🥄", nombre: "Cuchara de Madera", precio: 30, tipo: "arma", rareza: "comun",
+    descripcion: "El inicio de todo guerrero 🥄 (cosmético)",
+    poder: {} },
+  { id: "espada_basica", emoji: "🗡️", nombre: "Espada Básica", precio: 100, tipo: "arma", rareza: "comun",
+    descripcion: "+3 monedas por acierto ⚔️",
+    poder: { bonusMonedas: 3 } },
+  { id: "espadas_duales", emoji: "⚔️", nombre: "Espadas Duales", precio: 300, tipo: "arma", rareza: "raro",
+    descripcion: "¡El boss recibe DOBLE daño por golpe! 🗡️🗡️",
+    poder: { danoDoble: true } },
+  { id: "arco", emoji: "🏹", nombre: "Arco Élfico", precio: 250, tipo: "arma", rareza: "raro",
+    descripcion: "+2 segundos en el tiempo de respuesta 🏹",
+    poder: { bonusTiempo: 2 } },
+  { id: "lanza", emoji: "🔱", nombre: "Lanza del Mar", precio: 400, tipo: "arma", rareza: "epico",
+    descripcion: "+20% monedas en todo el mundo 🔱",
+    poder: { multiplicadorMonedas: 1.2 } },
+  { id: "hacha", emoji: "🪓", nombre: "Hacha del Vikingo", precio: 350, tipo: "arma", rareza: "epico",
+    descripcion: "+15 monedas extra por acierto 🪓",
+    poder: { bonusMonedas: 15 } },
+  { id: "trueno", emoji: "⚡", nombre: "TRUENO SUPREMO", precio: 1500, tipo: "arma", rareza: "legendaria",
+    descripcion: "+50% monedas SIEMPRE ⚡ + doble daño al boss", requiere_nivel: 7,
+    poder: { multiplicadorMonedas: 1.5, danoDoble: true } },
+  { id: "tridente", emoji: "🔱", nombre: "TRIDENTE DE NEPTUNO", precio: 2000, tipo: "arma", rareza: "legendaria",
+    descripcion: "Una vida extra permanente al iniciar 🔱", requiere_nivel: 8,
+    poder: { vidasExtra: 1 } },
+  { id: "caduceo", emoji: "🪄", nombre: "VARITA DE MERLÍN", precio: 2500, tipo: "arma", rareza: "legendaria",
+    descripcion: "+5 segundos + 30% más monedas 🪄", requiere_nivel: 9,
+    poder: { bonusTiempo: 5, multiplicadorMonedas: 1.3 } },
+  { id: "ultima", emoji: "🌟", nombre: "OMEGA BLADE", precio: 5000, tipo: "arma", rareza: "legendaria",
+    descripcion: "Invencible en Mundo Supremo + 2 vidas extra 🌟", requiere_nivel: 10,
+    poder: { inmortalSupremo: true, vidasExtra: 2 } },
+
+  // ── Más Sombreros ──
+  { id: "sombrero_cowboy", emoji: "🤠", nombre: "Sombrero Vaquero", precio: 70, tipo: "cabeza", rareza: "comun",
+    descripcion: "+2 monedas extra por acierto 🤠",
+    poder: { bonusMonedas: 2 } },
+  { id: "birrete", emoji: "🎓", nombre: "Birrete del Sabio", precio: 90, tipo: "cabeza", rareza: "comun",
+    descripcion: "+2 segundos en cada pregunta 🎓",
+    poder: { bonusTiempo: 2 } },
+  { id: "gorro_fiesta", emoji: "🎉", nombre: "Gorro de Fiesta", precio: 40, tipo: "cabeza", rareza: "comun",
+    descripcion: "¡Celebra con estilo! (cosmético) 🎉",
+    poder: {} },
+  { id: "sombrero_pirata", emoji: "🏴‍☠️", nombre: "Sombrero Pirata", precio: 180, tipo: "cabeza", rareza: "raro",
+    descripcion: "+5 monedas por acierto ☠️",
+    poder: { bonusMonedas: 5 } },
+  { id: "antifaz", emoji: "🦸", nombre: "Antifaz de Superhéroe", precio: 130, tipo: "cabeza", rareza: "raro",
+    descripcion: "Escudo: absorbe 1 error 🦸",
+    poder: { escudo: true } },
+  { id: "turbante", emoji: "🧞", nombre: "Turbante del Genio", precio: 160, tipo: "cabeza", rareza: "raro",
+    descripcion: "+3 segundos extra por pregunta 🧞",
+    poder: { bonusTiempo: 3 } },
+  { id: "corona_estrellas", emoji: "🌟", nombre: "Corona de Estrellas", precio: 320, tipo: "cabeza", rareza: "epico",
+    descripcion: "+30% monedas en todo el mundo ⭐",
+    poder: { multiplicadorMonedas: 1.3 } },
+  { id: "halo", emoji: "😇", nombre: "Halo de Ángel", precio: 280, tipo: "cabeza", rareza: "epico",
+    descripcion: "Escudo divino + 1 vida extra 😇",
+    poder: { escudo: true, vidasExtra: 1 } },
+  { id: "sombrero_bruja2", emoji: "🧙", nombre: "Sombrero de Mago Negro", precio: 220, tipo: "cabeza", rareza: "raro",
+    descripcion: "+4 segundos de tiempo por pregunta 🧙",
+    poder: { bonusTiempo: 4 } },
+  { id: "casco_dragon", emoji: "🐲", nombre: "Casco del Dragón", precio: 800, tipo: "cabeza", rareza: "legendaria",
+    descripcion: "+40% monedas + doble daño al boss 🐲", requiere_nivel: 5,
+    poder: { multiplicadorMonedas: 1.4, danoDoble: true } },
+
+  // ── Más Armas ──
+  { id: "escoba", emoji: "🧹", nombre: "Escoba Mágica", precio: 75, tipo: "arma", rareza: "comun",
+    descripcion: "¡Barre errores con estilo! (cosmético) 🧹",
+    poder: {} },
+  { id: "martillo", emoji: "🔨", nombre: "Martillo del Constructor", precio: 90, tipo: "arma", rareza: "comun",
+    descripcion: "+4 monedas extra por acierto 🔨",
+    poder: { bonusMonedas: 4 } },
+  { id: "baston", emoji: "🪄", nombre: "Bastón del Anciano", precio: 140, tipo: "arma", rareza: "raro",
+    descripcion: "+2 segundos de tiempo ⏱️",
+    poder: { bonusTiempo: 2 } },
+  { id: "guitarra", emoji: "🎸", nombre: "Guitarra Eléctrica", precio: 170, tipo: "arma", rareza: "raro",
+    descripcion: "+8 monedas extra por acierto 🎸",
+    poder: { bonusMonedas: 8 } },
+  { id: "zarpa", emoji: "🐾", nombre: "Zarpa de Tigre", precio: 280, tipo: "arma", rareza: "epico",
+    descripcion: "+20% monedas extra en todo 🐾",
+    poder: { multiplicadorMonedas: 1.2 } },
+  { id: "orbe", emoji: "🔮", nombre: "Orbe de Poder", precio: 350, tipo: "arma", rareza: "epico",
+    descripcion: "+5 segundos por pregunta 🔮",
+    poder: { bonusTiempo: 5 } },
+  { id: "espada_fuego", emoji: "🔥", nombre: "Espada de Fuego", precio: 450, tipo: "arma", rareza: "epico",
+    descripcion: "¡Doble daño al boss! 🔥", requiere_nivel: 3,
+    poder: { danoDoble: true } },
+  { id: "lanza_hielo", emoji: "❄️", nombre: "Lanza de Hielo", precio: 500, tipo: "arma", rareza: "epico",
+    descripcion: "Congela: +5 segundos ❄️", requiere_nivel: 4,
+    poder: { bonusTiempo: 5 } },
+  { id: "katana", emoji: "⚔️", nombre: "Katana del Samurái", precio: 600, tipo: "arma", rareza: "epico",
+    descripcion: "+40% monedas siempre ⚔️", requiere_nivel: 6,
+    poder: { multiplicadorMonedas: 1.4 } },
+  { id: "arco_fuego", emoji: "🏹", nombre: "Arco de Fuego Sagrado", precio: 1200, tipo: "arma", rareza: "legendaria",
+    descripcion: "+75% monedas + guarda coins si pierdes 🏹", requiere_nivel: 6,
+    poder: { multiplicadorMonedas: 1.75, guardaMonedas: true } },
+
+  // ── Accesorios ──
+  { id: "escudo", emoji: "🛡️", nombre: "Escudo del Dragón", precio: 200, tipo: "accesorio", rareza: "raro",
+    descripcion: "Absorbe 1 error sin perder vida 🛡️",
+    poder: { escudo: true } },
+  { id: "amuleto", emoji: "🧿", nombre: "Amuleto de la Suerte", precio: 80, tipo: "accesorio", rareza: "comun",
+    descripcion: "+5 monedas extra por acierto 🧿",
+    poder: { bonusMonedas: 5 } },
+  { id: "mochila", emoji: "🎒", nombre: "Mochila Mágica", precio: 150, tipo: "accesorio", rareza: "raro",
+    descripcion: "Si pierdes, conservas tus monedas 🎒",
+    poder: { guardaMonedas: true } },
+  { id: "cofre", emoji: "📦", nombre: "Cofre Sorpresa", precio: 200, tipo: "accesorio", rareza: "raro",
+    descripcion: "+10 monedas extra por acierto 📦",
+    poder: { bonusMonedas: 10 } },
+  { id: "capa", emoji: "🦸", nombre: "Capa de Héroe", precio: 400, tipo: "accesorio", rareza: "epico",
+    descripcion: "Escudo + 1 vida extra 🦸",
+    poder: { escudo: true, vidasExtra: 1 } },
+  { id: "cristal_tiempo", emoji: "⏳", nombre: "Cristal del Tiempo", precio: 500, tipo: "accesorio", rareza: "epico",
+    descripcion: "+5 segundos en CADA pregunta con tiempo ⏳",
+    poder: { bonusTiempo: 5 } },
+  { id: "gafas_sol", emoji: "🕶️", nombre: "Gafas de Sol", precio: 60, tipo: "accesorio", rareza: "comun",
+    descripcion: "+2 monedas extra por acierto 🕶️",
+    poder: { bonusMonedas: 2 } },
+  { id: "gafas_sabio", emoji: "👓", nombre: "Gafas del Sabio", precio: 75, tipo: "accesorio", rareza: "comun",
+    descripcion: "+2 segundos extra de tiempo 👓",
+    poder: { bonusTiempo: 2 } },
+  { id: "pocion_fuerza", emoji: "🧪", nombre: "Poción de Fuerza", precio: 70, tipo: "accesorio", rareza: "comun",
+    descripcion: "+8 monedas extra por acierto 🧪",
+    poder: { bonusMonedas: 8 } },
+  { id: "brujula", emoji: "🧭", nombre: "Brújula Aventurera", precio: 100, tipo: "accesorio", rareza: "comun",
+    descripcion: "+3 monedas extra por acierto 🧭",
+    poder: { bonusMonedas: 3 } },
+  { id: "llave_exito", emoji: "🗝️", nombre: "Llave del Éxito", precio: 90, tipo: "accesorio", rareza: "comun",
+    descripcion: "+3 monedas extra por acierto 🗝️",
+    poder: { bonusMonedas: 3 } },
+  { id: "medalla_oro", emoji: "🥇", nombre: "Medalla de Oro", precio: 120, tipo: "accesorio", rareza: "raro",
+    descripcion: "+10% monedas en todo el mundo 🥇",
+    poder: { multiplicadorMonedas: 1.1 } },
+  { id: "alas_mariposa", emoji: "🦋", nombre: "Alas de Mariposa", precio: 160, tipo: "accesorio", rareza: "raro",
+    descripcion: "+6 monedas extra por acierto 🦋",
+    poder: { bonusMonedas: 6 } },
+  { id: "estrella_fugaz", emoji: "💫", nombre: "Estrella Fugaz", precio: 180, tipo: "accesorio", rareza: "raro",
+    descripcion: "Escudo: absorbe 1 error 💫",
+    poder: { escudo: true } },
+  { id: "anillo_magico", emoji: "💍", nombre: "Anillo del Poder", precio: 300, tipo: "accesorio", rareza: "epico",
+    descripcion: "+3 segundos en el boss + 10 monedas extra 💍",
+    poder: { bonusTiempo: 3, bonusMonedas: 10 } },
+  { id: "corazon_dragon", emoji: "❤️‍🔥", nombre: "Corazón de Dragón", precio: 400, tipo: "accesorio", rareza: "epico",
+    descripcion: "+1 vida extra al iniciar + 10 monedas ❤️‍🔥", requiere_nivel: 4,
+    poder: { vidasExtra: 1, bonusMonedas: 10 } },
+  { id: "mascota_dragon", emoji: "🐉", nombre: "Dragón Mascota", precio: 500, tipo: "accesorio", rareza: "epico",
+    descripcion: "+25% monedas siempre 🐉", requiere_nivel: 5,
+    poder: { multiplicadorMonedas: 1.25 } },
+  { id: "alas_angel", emoji: "🪽", nombre: "Alas de Ángel", precio: 700, tipo: "accesorio", rareza: "legendaria",
+    descripcion: "1 vida extra + escudo divino 🪽", requiere_nivel: 6,
+    poder: { vidasExtra: 1, escudo: true } },
+  { id: "escudo_supremo", emoji: "🔰", nombre: "Escudo Supremo", precio: 900, tipo: "accesorio", rareza: "legendaria",
+    descripcion: "Escudo + 1 vida extra + guarda monedas 🔰", requiere_nivel: 8,
+    poder: { escudo: true, vidasExtra: 1, guardaMonedas: true } },
+];
+
+// ─── HELPER: PODERES ACTIVOS ─────────────────────────────────
+// Combina los poderes de todos los ítems equipados y del avatar
+export function getPoderes(inventario = [], equipado = {}, avatarId = null) {
+  const poderes = {
+    bonusTiempo: 0,
+    bonusMonedas: 0,
+    multiplicadorMonedas: 1.0,
+    escudo: false,
+    vidasExtra: 0,
+    danoDoble: false,
+    inmortalSupremo: false,
+    guardaMonedas: false,
+  };
+
+  // Poderes del avatar
+  const avatar = AVATARES.find(a => a.id === avatarId);
+  if (avatar?.poder) aplicarPoder(poderes, avatar.poder);
+
+  // Poderes de ítems equipados (cabeza, arma, accesorio)
+  const slotsEquipados = Object.values(equipado).filter(Boolean);
+  for (const itemId of slotsEquipados) {
+    const item = TIENDA_ITEMS.find(i => i.id === itemId);
+    if (item?.poder) aplicarPoder(poderes, item.poder);
+  }
+
+  return poderes;
+}
+
+function aplicarPoder(acum, poder) {
+  if (poder.bonusTiempo)          acum.bonusTiempo          += poder.bonusTiempo;
+  if (poder.bonusMonedas)         acum.bonusMonedas          += poder.bonusMonedas;
+  if (poder.multiplicadorMonedas) acum.multiplicadorMonedas  *= poder.multiplicadorMonedas;
+  if (poder.escudo)               acum.escudo                 = true;
+  if (poder.vidasExtra)           acum.vidasExtra            += poder.vidasExtra;
+  if (poder.danoDoble)            acum.danoDoble              = true;
+  if (poder.inmortalSupremo)      acum.inmortalSupremo        = true;
+  if (poder.guardaMonedas)        acum.guardaMonedas          = true;
+}
+
+// ─── TIPS ──────────────────────────────────────────────────
+export const TIPS_TABLAS = {
+  1: ["¡La tabla del 1 es fácil! Todo multiplicado por 1 = ese mismo número 🎯", "1×8 = 8. ¡Siempre el mismo número!"],
+  2: ["La tabla del 2 es sumar el número dos veces: 2×6 = 6+6 = 12 ✌️", "¡Piensa en pares!"],
+  3: ["Para el 3, suma el número tres veces: 3×4 = 4+4+4 = 12 🔺", "Busca el patrón: 3,6,9,12,15,18,21,24,27,30"],
+  4: ["El 4 es como doblar el doble: 4×7 = 7+7+7+7 ó (7×2)×2 = 28 🟦", "¡Duplica dos veces!"],
+  5: ["La tabla del 5 siempre termina en 0 o 5: 5,10,15,20... ⭐", "¡Cuenta de 5 en 5 con tus dedos!"],
+  6: ["6×número = 5×número + número extra 🎲", "6×7 = 35+7 = 42. ¡Usa el 5 como ayuda!"],
+  7: ["La tabla del 7 es la más difícil. ¡Aprende estos: 7×7=49, 7×8=56, 7×9=63! 🦁", "Canción: 7,14,21,28,35,42,49,56,63,70"],
+  8: ["8 = doblar 3 veces: 8×6 = 6×2×2×2 = 48 🔥", "8×número es 10×número - 2×número: 8×7=70-14=56"],
+  9: ["¡Truco del 9! Los dedos: dobla el dedo N, los de la izquierda = decenas, los de la derecha = unidades 🖐️", "También: 9×número = 10×número - número"],
+  10: ["¡La más fácil! Solo agrega un 0: 10×7=70, 10×9=90 🌟", "¡10 siempre termina en 0!"],
+};
+
+export const PREGUNTAS_REFUERZO = {
+  despues_error: "¡Tranquilo! Inténtalo de nuevo. El error es parte del aprendizaje 💪",
+  racha_3: "¡3 seguidas! ¡Eres increíble! 🔥",
+  racha_5: "¡5 PERFECTAS! ¡Eres un MAESTRO! ⭐",
+  racha_10: "¡¡10 PERFECTAS!! ¡MODO DIOS ACTIVADO! 👑",
+  boss_cerca: "¡Ya casi! ¡El boss te espera!",
+};
