@@ -456,6 +456,28 @@ def _generar_codigo(nombre: str, tipo: str) -> str:
 def root():
     return {"status": "ok", "app": "Aventura de Tablas Pro v3.0", "db": "SQLite local"}
 
+@app.get("/api/debug-email")
+async def debug_email(bg: BackgroundTasks):
+    """Diagnóstico de email — visita esta URL en el navegador para probar."""
+    tiene_pass = bool(EMAIL_PASS)
+    if not tiene_pass:
+        return {
+            "error": "EMAIL_PASSWORD no configurado en las variables de entorno de Render",
+            "EMAIL_REMITENTE": EMAIL_FROM,
+            "solucion": "Ve a Render → tu servicio → Environment → agrega EMAIL_PASSWORD con tu contraseña de aplicación de Gmail"
+        }
+    bg.add_task(
+        enviar_correo, EMAIL_FROM,
+        "🧪 Prueba de Email — Aventura de Tablas",
+        "<h1 style='color:#00f5ff'>¡Email funcionando correctamente!</h1><p>Si recibes este correo, el sistema de emails está operativo.</p>"
+    )
+    return {
+        "ok": True,
+        "mensaje": f"Enviando correo de prueba a {EMAIL_FROM} — revisa tu bandeja de entrada en 1 minuto",
+        "EMAIL_REMITENTE": EMAIL_FROM,
+        "EMAIL_PASSWORD": "configurado ✓"
+    }
+
 @app.get("/api/test")
 def test_conexion():
     """Endpoint para verificar que el backend está corriendo."""
