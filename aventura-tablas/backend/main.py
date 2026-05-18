@@ -457,26 +457,41 @@ def root():
     return {"status": "ok", "app": "Aventura de Tablas Pro v3.0", "db": "SQLite local"}
 
 @app.get("/api/debug-email")
-async def debug_email(bg: BackgroundTasks):
-    """Diagnóstico de email — visita esta URL en el navegador para probar."""
-    tiene_pass = bool(EMAIL_PASS)
-    if not tiene_pass:
+def debug_email():
+    """Prueba de email SÍNCRONA — muestra el error real si falla."""
+    if not EMAIL_PASS:
         return {
-            "error": "EMAIL_PASSWORD no configurado en las variables de entorno de Render",
+            "error": "EMAIL_PASSWORD no configurado",
             "EMAIL_REMITENTE": EMAIL_FROM,
-            "solucion": "Ve a Render → tu servicio → Environment → agrega EMAIL_PASSWORD con tu contraseña de aplicación de Gmail"
+            "solucion": "Ve a Render → Environment → agrega EMAIL_PASSWORD con tu contraseña de aplicación de Gmail"
         }
-    bg.add_task(
-        enviar_correo, EMAIL_FROM,
+    resultado = enviar_correo(
+        EMAIL_FROM,
         "🧪 Prueba de Email — Aventura de Tablas",
-        "<h1 style='color:#00f5ff'>¡Email funcionando correctamente!</h1><p>Si recibes este correo, el sistema de emails está operativo.</p>"
+        "<h1 style='color:#00f5ff'>¡Email funcionando!</h1>"
     )
     return {
-        "ok": True,
-        "mensaje": f"Enviando correo de prueba a {EMAIL_FROM} — revisa tu bandeja de entrada en 1 minuto",
+        "enviado": resultado,
         "EMAIL_REMITENTE": EMAIL_FROM,
-        "EMAIL_PASSWORD": "configurado ✓"
+        "EMAIL_PASSWORD": "configurado ✓",
+        "nota": "Revisa los logs de Render para ver detalles si enviado=false"
     }
+
+@app.get("/api/debug-solicitudes")
+def debug_solicitudes():
+    """Ver últimas solicitudes guardadas en la DB."""
+    conn = get_db()
+    try:
+        rows = conn.execute("SELECT id, Fecha, Nombre, Correo, Tipo, Estado FROM Solicitudes ORDER BY id DESC LIMIT 10").fetchall()
+        rows_g = conn.execute("SELECT id, Fecha, Tutor_Nombre, Tutor_Correo, Tutor_Tipo, Estado FROM Solicitudes_Grupo ORDER BY id DESC LIMIT 10").fetchall()
+        return {
+            "solicitudes_individuales": [dict(r) for r in rows],
+            "solicitudes_grupo": [dict(r) for r in rows_g],
+            "total_individuales": conn.execute("SELECT COUNT(*) as n FROM Solicitudes").fetchone()["n"],
+            "total_grupo": conn.execute("SELECT COUNT(*) as n FROM Solicitudes_Grupo").fetchone()["n"],
+        }
+    finally:
+        conn.close()
 
 @app.get("/api/test")
 def test_conexion():
