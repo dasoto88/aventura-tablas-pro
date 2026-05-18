@@ -2,7 +2,7 @@
 Aventura de Tablas Pro v3.0 — Backend SQLite completo
 Incluye: sesiones, maestros/alumnos, reportes, emails automáticos, auto-códigos
 """
-from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile
+from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -135,9 +135,11 @@ EMAIL_FROM   = os.getenv("EMAIL_REMITENTE", "pixelimpresorasap@gmail.com")
 EMAIL_PASS   = os.getenv("EMAIL_PASSWORD", "")
 RESEND_KEY   = os.getenv("RESEND_API_KEY", "")
 BREVO_KEY    = os.getenv("BREVO_API_KEY", "")
-LINK_MP    = os.getenv("LINK_MERCADO_PAGO", "https://mpago.la/1HSsTdv")
-DATOS_BBVA = os.getenv("DATOS_TRANSFERENCIA",
+LINK_MP      = os.getenv("LINK_MERCADO_PAGO", "https://mpago.la/1HSsTdv")
+DATOS_BBVA   = os.getenv("DATOS_TRANSFERENCIA",
     "Banco: BBVA | Cuenta: 4152314169570341 | Titular: David Soto Beltran | Concepto: AventuraTablas + Nombre alumno")
+MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
+FRONTEND_URL    = os.getenv("FRONTEND_URL", "https://phenomenal-pasca-e4421b.netlify.app")
 
 DB_PATH = Path(__file__).parent / "aventura_tablas.db"
 
@@ -824,21 +826,26 @@ def validar_licencia(data: ValidarLicencia):
 async def registro(data: SolicitudRegistro, bg: BackgroundTasks):
     conn = get_db()
     try:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO Solicitudes (Fecha,Nombre,Correo,Celular,Escuela,Tipo,Grado,Num_Alumnos,Estado) "
             "VALUES (?,?,?,?,?,?,?,?,?)",
             (datetime.now().strftime("%Y-%m-%d %H:%M"), data.nombre, data.correo,
              data.celular, data.escuela, data.tipo or "alumno",
              data.grado or "", data.num_alumnos or 0, "Pendiente")
         )
+        sol_id = cur.lastrowid
         conn.commit()
-        if data.correo and EMAIL_PASS:
+        if data.correo:
             bg.add_task(
                 enviar_correo, data.correo,
                 "🎮 Aventura de Tablas — ¡Solicitud Recibida!",
                 email_solicitud(data.nombre, data.tipo == "maestro")
             )
-        return {"ok": True}
+        init_point = _mp_crear_preferencia(
+            f"Aventura de Tablas — Licencia {data.tipo or 'alumno'}",
+            99.0, f"sol_{sol_id}", data.correo
+        )
+        return {"ok": True, "sol_id": sol_id, "init_point": init_point}
     except Exception as e:
         raise HTTPException(500, str(e))
     finally:
@@ -1521,7 +1528,7 @@ async def registro_grupo(data: RegistroGrupo, bg: BackgroundTasks):
 
     conn = get_db()
     try:
-        conn.execute(
+        cur = conn.execute(
             """INSERT INTO Solicitudes_Grupo
                (Fecha,Tutor_Nombre,Tutor_Correo,Tutor_Celular,Tutor_Escuela,Tutor_Tipo,
                 Num_Dependientes,Dependientes_Json,Costo_Total,Tipo_Pago,Estado)
@@ -1531,20 +1538,25 @@ async def registro_grupo(data: RegistroGrupo, bg: BackgroundTasks):
              data.tutor_escuela or "", data.tutor_tipo,
              len(data.dependientes), deps_json, costo, tipo_pago, "Pendiente")
         )
+        grp_id = cur.lastrowid
         conn.commit()
     except Exception as e:
         raise HTTPException(500, str(e))
     finally:
         conn.close()
 
-    if data.tutor_correo and EMAIL_PASS:
+    if data.tutor_correo:
         bg.add_task(
             enviar_correo, data.tutor_correo,
             "🎓 Aventura de Tablas — Solicitud de grupo recibida",
             email_registro_grupo(data.tutor_nombre, data.tutor_tipo,
                                  data.dependientes, costo_desc, tipo_pago, costo)
         )
-    return {"ok": True, "costo": costo, "tipo_pago": tipo_pago, "descripcion": costo_desc}
+    num_dep_validos = len([d for d in data.dependientes if (d.get("nombre") if isinstance(d, dict) else str(d)).strip()])
+    titulo_mp = f"Aventura de Tablas — {data.tutor_tipo.title()} + {num_dep_validos} {'alumnos' if data.tutor_tipo == 'maestro' else 'hijos'}"
+    init_point = _mp_crear_preferencia(titulo_mp, float(costo), f"grp_{grp_id}", data.tutor_correo)
+    return {"ok": True, "costo": costo, "tipo_pago": tipo_pago, "descripcion": costo_desc,
+            "grp_id": grp_id, "init_point": init_point}
 
 # ─── AGREGAR DEPENDIENTES A TUTOR EXISTENTE ──────────────────
 @app.post("/api/tutor/agregar-dependientes")
@@ -1876,6 +1888,184 @@ def admin_estadisticas():
         }
     finally:
         conn.close()
+
+# ─── MERCADO PAGO ─────────────────────────────────────────────
+
+def _mp_crear_preferencia(titulo: str, monto: float, ref: str, correo: str) -> Optional[str]:
+    if not MP_ACCESS_TOKEN:
+        return None
+    payload = json.dumps({
+        "items": [{"title": titulo, "quantity": 1, "unit_price": float(monto), "currency_id": "MXN"}],
+        "payer": {"email": correo or "cliente@aventuratablas.mx"},
+        "external_reference": ref,
+        "notification_url": "https://aventura-tablas-pro.onrender.com/api/webhook/mercadopago",
+        "back_urls": {
+            "success":  f"{FRONTEND_URL}?pago=ok",
+            "failure":  f"{FRONTEND_URL}?pago=error",
+            "pending":  f"{FRONTEND_URL}?pago=pendiente",
+        },
+        "auto_return": "approved",
+        "statement_descriptor": "AVENTURA DE TABLAS",
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.mercadopago.com/checkout/preferences",
+        data=payload,
+        headers={"Authorization": f"Bearer {MP_ACCESS_TOKEN}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+            url = data.get("init_point")
+            print(f"[MP] Preferencia creada ref={ref} url={url}")
+            return url
+    except Exception as e:
+        print(f"[MP] Error creando preferencia: {e}")
+        return None
+
+def _mp_get_payment(payment_id: str) -> dict:
+    req = urllib.request.Request(
+        f"https://api.mercadopago.com/v1/payments/{payment_id}",
+        headers={"Authorization": f"Bearer {MP_ACCESS_TOKEN}"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read())
+    except Exception as e:
+        print(f"[MP] Error obteniendo pago {payment_id}: {e}")
+        return {}
+
+def _activar_por_pago_individual(sol_id: int):
+    conn = get_db()
+    try:
+        sol = conn.execute("SELECT * FROM Solicitudes WHERE id=?", (sol_id,)).fetchone()
+        if not sol or sol["Estado"] == "Activo":
+            return
+        tipo = sol["Tipo"] or "alumno"
+        codigo = ""
+        for _ in range(10):
+            c = _generar_codigo(sol["Nombre"], tipo)
+            if not conn.execute("SELECT id FROM Licencias WHERE Licencia=?", (c,)).fetchone():
+                codigo = c; break
+        if not codigo:
+            return
+        fecha_vence = (datetime.now() + timedelta(days=30)).strftime("%d/%m/%Y")
+        conn.execute("""
+            INSERT OR IGNORE INTO Licencias
+            (Licencia,Activa,Tipo,Nombre,Correo,Celular,Grado,Fecha_Vence)
+            VALUES (?,?,?,?,?,?,?,?)
+        """, (codigo, "SI", tipo, sol["Nombre"] or "", sol["Correo"] or "",
+              sol["Celular"] or "", sol["Grado"] or "", fecha_vence))
+        conn.execute("UPDATE Solicitudes SET Estado='Activo' WHERE id=?", (sol_id,))
+        conn.commit()
+        print(f"[MP Activar] {codigo} → {sol['Nombre']}")
+        if sol["Correo"]:
+            enviar_correo(sol["Correo"],
+                "✅ ¡Pago aprobado! Tu licencia de Aventura de Tablas",
+                email_activacion(sol["Nombre"] or "Aventurero", codigo, fecha_vence, "", sol["Grado"] or ""))
+        gs_guardar_licencia(codigo)
+    except Exception as e:
+        print(f"[MP Activar] Error: {e}")
+    finally:
+        conn.close()
+
+def _activar_por_pago_grupo(grp_id: int):
+    conn = get_db()
+    try:
+        sol = conn.execute("SELECT * FROM Solicitudes_Grupo WHERE id=?", (grp_id,)).fetchone()
+        if not sol or sol["Estado"] == "Activo":
+            return
+        deps      = json.loads(sol["Dependientes_Json"] or "[]")
+        tipo_pago = sol["Tipo_Pago"] or "mensual"
+        dias      = 150 if tipo_pago == "unico" else 30
+        fecha_vence  = (datetime.now() + timedelta(days=dias)).strftime("%d/%m/%Y")
+        tutor_tipo   = sol["Tutor_Tipo"]
+
+        # Licencia del tutor
+        tutor_lic = ""
+        for _ in range(10):
+            c = _generar_codigo(sol["Tutor_Nombre"], tutor_tipo)
+            if not conn.execute("SELECT id FROM Licencias WHERE Licencia=?", (c,)).fetchone():
+                tutor_lic = c; break
+        conn.execute("""
+            INSERT OR IGNORE INTO Licencias
+            (Licencia,Activa,Tipo,Nombre,Correo,Celular,Fecha_Vence)
+            VALUES (?,?,?,?,?,?,?)
+        """, (tutor_lic, "SI", tutor_tipo, sol["Tutor_Nombre"],
+              sol["Tutor_Correo"], sol["Tutor_Celular"], fecha_vence))
+
+        # Licencias de dependientes
+        dependientes_activados = []
+        for dep in deps:
+            if isinstance(dep, dict):
+                dep_nombre = dep.get("nombre", "")
+                dep_correo = dep.get("correo", "")
+                dep_grado  = dep.get("grado", "")
+            else:
+                dep_nombre, dep_correo, dep_grado = str(dep), "", ""
+            if not dep_nombre.strip():
+                continue
+            dep_lic = ""
+            for _ in range(10):
+                c = _generar_codigo(dep_nombre, "alumno")
+                if not conn.execute("SELECT id FROM Licencias WHERE Licencia=?", (c,)).fetchone():
+                    dep_lic = c; break
+            conn.execute("""
+                INSERT OR IGNORE INTO Licencias
+                (Licencia,Activa,Tipo,Nombre,Correo,Grado,Maestro_Licencia,Fecha_Vence)
+                VALUES (?,?,?,?,?,?,?,?)
+            """, (dep_lic, "SI", "alumno", dep_nombre, dep_correo,
+                  dep_grado, tutor_lic, fecha_vence))
+            dependientes_activados.append({"nombre": dep_nombre, "licencia": dep_lic, "vence": fecha_vence})
+            # Email individual al alumno/hijo
+            if dep_correo:
+                enviar_correo(dep_correo,
+                    "✅ ¡Tu licencia de Aventura de Tablas está lista!",
+                    email_activacion(dep_nombre, dep_lic, fecha_vence,
+                                     sol["Tutor_Nombre"] if tutor_tipo == "maestro" else "", dep_grado))
+            gs_guardar_licencia(dep_lic)
+
+        conn.execute("UPDATE Solicitudes_Grupo SET Estado='Activo', Tutor_Licencia=? WHERE id=?",
+                     (tutor_lic, grp_id))
+        conn.commit()
+        # Email al tutor con TODAS las licencias
+        if sol["Tutor_Correo"]:
+            enviar_correo(sol["Tutor_Correo"],
+                f"✅ ¡{'Grupo' if tutor_tipo == 'maestro' else 'Familia'} activado! Todas las licencias",
+                email_activacion_grupo(sol["Tutor_Nombre"], tutor_tipo, tutor_lic,
+                                       fecha_vence, dependientes_activados, tipo_pago))
+        gs_guardar_licencia(tutor_lic)
+        print(f"[MP Activar Grupo] {tutor_lic} + {len(dependientes_activados)} dependientes")
+    except Exception as e:
+        print(f"[MP Activar Grupo] Error: {e}")
+    finally:
+        conn.close()
+
+@app.post("/api/webhook/mercadopago")
+async def webhook_mercadopago(request: Request, bg: BackgroundTasks):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    tipo = body.get("type", "")
+    print(f"[MP Webhook] tipo={tipo}")
+    if tipo != "payment":
+        return {"ok": True}
+    payment_id = str(body.get("data", {}).get("id", ""))
+    if not payment_id:
+        return {"ok": True}
+    payment = _mp_get_payment(payment_id)
+    status = payment.get("status", "")
+    ref    = payment.get("external_reference", "")
+    print(f"[MP Webhook] id={payment_id} status={status} ref={ref}")
+    if status != "approved":
+        return {"ok": True}
+    if ref.startswith("sol_"):
+        bg.add_task(_activar_por_pago_individual, int(ref[4:]))
+    elif ref.startswith("grp_"):
+        bg.add_task(_activar_por_pago_grupo, int(ref[4:]))
+    return {"ok": True}
 
 # ─── BACKUP DE BASE DE DATOS ──────────────────────────────────
 

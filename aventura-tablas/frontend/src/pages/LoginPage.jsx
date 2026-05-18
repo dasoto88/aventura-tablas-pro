@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import axios from "axios";
@@ -14,6 +14,24 @@ export default function LoginPage() {
   const [tab, setTab] = useState(0);
   const { iniciarSesion, iniciarDemo } = useGameStore();
   const [musicStarted, setMusicStarted] = useState(false);
+  const [pagoEstado, setPagoEstado] = useState(null); // "ok" | "error" | "pendiente"
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pago = params.get("pago");
+    if (pago) {
+      setPagoEstado(pago);
+      // Limpiar el parámetro de la URL sin recargar
+      window.history.replaceState({}, "", window.location.pathname);
+      if (pago === "ok") {
+        toast.success("🎉 ¡Pago recibido! Tu licencia llegará a tu correo en segundos.");
+      } else if (pago === "error") {
+        toast.error("❌ El pago no se completó. Intenta de nuevo o contáctanos.");
+      } else if (pago === "pendiente") {
+        toast("⏳ Pago en proceso. Te avisaremos por correo cuando se confirme.", { icon: "⏳" });
+      }
+    }
+  }, []);
 
   const startMusic = () => {
     if (!musicStarted) { soundManager.iniciarMusica(); setMusicStarted(true); }
@@ -236,22 +254,30 @@ function TabRegistro() {
   const enviar = async () => {
     setLoading(true);
     try {
+      let respData;
       if (!esTutor) {
-        await axios.post(`${API}/api/registro`, {
+        const { data } = await axios.post(`${API}/api/registro`, {
           nombre: form.nombre, correo: form.correo, celular: form.celular,
           escuela: form.escuela || "", grado: form.grado || "", tipo: "alumno",
-        }, { timeout: 8000 });
+        }, { timeout: 12000 });
+        respData = data;
       } else {
         const validos = deps.filter(d => d.nombre.trim());
-        await axios.post(`${API}/api/registro/grupo`, {
+        const { data } = await axios.post(`${API}/api/registro/grupo`, {
           tutor_nombre: form.nombre, tutor_correo: form.correo,
           tutor_celular: form.celular, tutor_escuela: form.escuela || "",
           tutor_tipo: tipo, dependientes: validos,
-        }, { timeout: 8000 });
+        }, { timeout: 12000 });
+        respData = data;
       }
       soundManager.mundoCompleto();
-      toast.success("¡Solicitud enviada! Revisa tu correo 📧");
-      setPaso(5);
+      if (respData.init_point) {
+        toast.success("¡Solicitud registrada! Redirigiendo a Mercado Pago... 💳");
+        setTimeout(() => { window.location.href = respData.init_point; }, 1200);
+      } else {
+        toast.success("¡Solicitud enviada! Revisa tu correo 📧");
+        setPaso(5);
+      }
     } catch (e) {
       if (!e.response) toast.error("🔌 No se puede conectar al servidor.");
       else toast.error(e.response?.data?.detail || "Error al enviar. Intenta de nuevo.");
@@ -261,10 +287,10 @@ function TabRegistro() {
   if (paso === 5) return (
     <motion.div initial={{ scale:0 }} animate={{ scale:1 }} style={{ textAlign:"center", padding:20 }}>
       <div style={{ fontSize:64 }}>📨</div>
-      <h3 style={{ color:"#00f5ff", fontFamily:"Orbitron,monospace", margin:"16px 0 8px" }}>¡Solicitud enviada!</h3>
+      <h3 style={{ color:"#00f5ff", fontFamily:"Orbitron,monospace", margin:"16px 0 8px" }}>¡Solicitud recibida!</h3>
       <p style={{ color:"rgba(255,255,255,0.6)", fontFamily:"Nunito,sans-serif", lineHeight:1.6 }}>
         Revisa tu correo <strong style={{ color:"#a29bfe" }}>{form.correo}</strong>.<br/>
-        Te enviamos los datos de pago e instrucciones.
+        Te enviamos los datos para completar tu pago.
       </p>
       {costoInfo && (
         <div style={{ margin:"16px 0", background:"rgba(255,214,0,0.1)", border:"1px solid rgba(255,214,0,0.3)", borderRadius:14, padding:"14px" }}>
@@ -442,7 +468,7 @@ function TabRegistro() {
           <div style={{ display:"flex", gap:8 }}>
             <button onClick={() => setPaso(esTutor ? 3 : 2)} style={{ flex:1, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:12, color:"rgba(255,255,255,0.5)", cursor:"pointer", fontFamily:"Nunito,sans-serif", fontSize:14, padding:"12px" }}>← Atrás</button>
             <button className="btn btn-primary" style={{ flex:2, padding:12 }} onClick={enviar} disabled={loading}>
-              {loading ? "Enviando..." : "📨 ENVIAR SOLICITUD"}
+              {loading ? "⏳ Procesando..." : "💳 REGISTRAR Y PAGAR"}
             </button>
           </div>
         </motion.div>
