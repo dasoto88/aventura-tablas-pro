@@ -12,6 +12,7 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
+import urllib.request, urllib.error
 
 load_dotenv()
 
@@ -21,8 +22,10 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"]
 )
 
-EMAIL_FROM = os.getenv("EMAIL_REMITENTE", "pixelimpresorasap@gmail.com")
-EMAIL_PASS = os.getenv("EMAIL_PASSWORD", "")
+EMAIL_FROM   = os.getenv("EMAIL_REMITENTE", "pixelimpresorasap@gmail.com")
+EMAIL_PASS   = os.getenv("EMAIL_PASSWORD", "")
+RESEND_KEY   = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM  = os.getenv("RESEND_FROM", "Aventura de Tablas <onboarding@resend.dev>")
 LINK_MP    = os.getenv("LINK_MERCADO_PAGO", "https://mpago.la/1HSsTdv")
 DATOS_BBVA = os.getenv("DATOS_TRANSFERENCIA",
     "Banco: BBVA | Cuenta: 4152314169570341 | Titular: David Soto Beltran | Concepto: AventuraTablas + Nombre alumno")
@@ -241,35 +244,76 @@ class ReiniciarMundos(BaseModel):
     reiniciar_inventario: bool = False
 
 # ─── EMAIL ────────────────────────────────────────────────────
-def enviar_correo(destinatario: str, asunto: str, html: str) -> bool:
+def _enviar_via_resend(destinatario: str, asunto: str, html: str) -> bool:
+    """Envía email usando la API HTTP de Resend (nunca bloqueada por Render)."""
+    if not RESEND_KEY:
+        return False
+    payload = json.dumps({
+        "from":    RESEND_FROM,
+        "to":      [destinatario],
+        "subject": asunto,
+        "html":    html,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {RESEND_KEY}",
+            "Content-Type":  "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            ok = resp.status in (200, 201)
+            print(f"[Email Resend {'OK' if ok else 'FAIL'}] → {destinatario} (status {resp.status})")
+            return ok
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"[Email Resend Error] {e.code} {body}")
+        return False
+    except Exception as e:
+        print(f"[Email Resend Error] {e}")
+        return False
+
+def _enviar_via_smtp(destinatario: str, asunto: str, html: str) -> bool:
+    """Respaldo: Gmail SMTP con timeout corto."""
     if not EMAIL_PASS:
-        print("[Email] EMAIL_PASSWORD no configurado — correo omitido")
         return False
     msg = MIMEMultipart("alternative")
     msg["From"]    = EMAIL_FROM
     msg["To"]      = destinatario
     msg["Subject"] = asunto
     msg.attach(MIMEText(html, "html"))
-    # Intentar primero STARTTLS (587), luego SSL (465)
     for intentar_ssl in (False, True):
         try:
             if intentar_ssl:
                 import ssl
                 ctx = ssl.create_default_context()
-                with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx) as s:
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx, timeout=8) as s:
                     s.login(EMAIL_FROM, EMAIL_PASS)
                     s.send_message(msg)
             else:
-                with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as s:
-                    s.ehlo()
-                    s.starttls()
-                    s.ehlo()
+                with smtplib.SMTP("smtp.gmail.com", 587, timeout=8) as s:
+                    s.ehlo(); s.starttls(); s.ehlo()
                     s.login(EMAIL_FROM, EMAIL_PASS)
                     s.send_message(msg)
-            print(f"[Email OK {'SSL' if intentar_ssl else 'TLS'}] → {destinatario}")
+            print(f"[Email SMTP OK {'SSL' if intentar_ssl else 'TLS'}] → {destinatario}")
             return True
         except Exception as e:
-            print(f"[Email Error {'SSL' if intentar_ssl else 'TLS'}] {e}")
+            print(f"[Email SMTP Error {'SSL' if intentar_ssl else 'TLS'}] {e}")
+    return False
+
+def enviar_correo(destinatario: str, asunto: str, html: str) -> bool:
+    if not destinatario:
+        return False
+    # Resend primero (HTTPS, siempre funciona en Render)
+    if RESEND_KEY:
+        return _enviar_via_resend(destinatario, asunto, html)
+    # Respaldo: Gmail SMTP
+    if EMAIL_PASS:
+        return _enviar_via_smtp(destinatario, asunto, html)
+    print("[Email] Ningún método configurado (RESEND_API_KEY o EMAIL_PASSWORD)")
     return False
 
 # ─── TEMPLATES ────────────────────────────────────────────────
@@ -458,24 +502,21 @@ def root():
 
 @app.get("/api/debug-email")
 def debug_email():
-    """Prueba de email SÍNCRONA — muestra el error real si falla."""
-    if not EMAIL_PASS:
-        return {
-            "error": "EMAIL_PASSWORD no configurado",
-            "EMAIL_REMITENTE": EMAIL_FROM,
-            "solucion": "Ve a Render → Environment → agrega EMAIL_PASSWORD con tu contraseña de aplicación de Gmail"
-        }
+    """Prueba de email — muestra configuración y resultado."""
+    config = {
+        "RESEND_API_KEY":  "configurado ✓" if RESEND_KEY  else "❌ NO configurado",
+        "EMAIL_PASSWORD":  "configurado ✓" if EMAIL_PASS  else "❌ NO configurado",
+        "EMAIL_REMITENTE": EMAIL_FROM,
+        "RESEND_FROM":     RESEND_FROM,
+    }
+    if not RESEND_KEY and not EMAIL_PASS:
+        return {"error": "Ningún método de email configurado", **config}
     resultado = enviar_correo(
         EMAIL_FROM,
-        "🧪 Prueba de Email — Aventura de Tablas",
-        "<h1 style='color:#00f5ff'>¡Email funcionando!</h1>"
+        "🧪 Prueba — Aventura de Tablas",
+        "<h1 style='color:#00f5ff'>¡Email funcionando!</h1><p>Si recibes esto, el sistema de correos está activo.</p>"
     )
-    return {
-        "enviado": resultado,
-        "EMAIL_REMITENTE": EMAIL_FROM,
-        "EMAIL_PASSWORD": "configurado ✓",
-        "nota": "Revisa los logs de Render para ver detalles si enviado=false"
-    }
+    return {"enviado": resultado, **config}
 
 @app.get("/api/debug-solicitudes")
 def debug_solicitudes():
