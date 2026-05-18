@@ -17,6 +17,114 @@ import urllib.request, urllib.error
 
 load_dotenv()
 
+# ─── GOOGLE SHEETS ────────────────────────────────────────────
+GS_CREDS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
+GS_SHEET_ID   = os.getenv("GOOGLE_SHEET_ID", "")
+
+# Columnas que se sincronizan con la hoja "Licencias"
+GS_COLS = ["Licencia","Activa","Tipo","Nombre","Correo","Celular",
+           "Monedas","Inventario","Nivel_Max","Fecha_Vence","Grado",
+           "Maestro_Licencia","Mundos_Completados","Fallos_Tablas",
+           "Tiempo_Total_Min","Reset_Forzado"]
+
+_gs_client = None
+
+def _get_gs_sheet(tab: str):
+    """Retorna la hoja de Google Sheets indicada, o None si no está configurado."""
+    global _gs_client
+    if not GS_CREDS_JSON or not GS_SHEET_ID:
+        return None
+    try:
+        if _gs_client is None:
+            import gspread
+            from google.oauth2.service_account import Credentials
+            creds = Credentials.from_service_account_info(
+                json.loads(GS_CREDS_JSON),
+                scopes=["https://www.googleapis.com/auth/spreadsheets",
+                        "https://www.googleapis.com/auth/drive"],
+            )
+            _gs_client = gspread.authorize(creds)
+        return _gs_client.open_by_key(GS_SHEET_ID).worksheet(tab)
+    except Exception as e:
+        print(f"[Sheets] Error conectando: {e}")
+        return None
+
+def gs_cargar_licencias():
+    """Al iniciar: si la DB está vacía importa desde Google Sheets."""
+    ws = _get_gs_sheet("Licencias")
+    if not ws:
+        return
+    try:
+        rows = ws.get_all_records()
+        if not rows:
+            return
+        conn = get_db()
+        existentes = conn.execute("SELECT COUNT(*) as n FROM Licencias WHERE Tipo != 'admin'").fetchone()["n"]
+        if existentes > 0:
+            print(f"[Sheets] DB ya tiene {existentes} registros — no se sobrescribe")
+            return
+        importados = 0
+        for r in rows:
+            lic = str(r.get("Licencia","")).strip()
+            if not lic or r.get("Tipo") == "admin":
+                continue
+            try:
+                conn.execute("""
+                    INSERT OR REPLACE INTO Licencias
+                    (Licencia,Activa,Tipo,Nombre,Correo,Celular,Monedas,Inventario,
+                     Nivel_Max,Fecha_Vence,Grado,Maestro_Licencia,Mundos_Completados,
+                     Fallos_Tablas,Tiempo_Total_Min,Reset_Forzado)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """, (
+                    lic,
+                    str(r.get("Activa","NO")),
+                    str(r.get("Tipo","alumno")),
+                    str(r.get("Nombre","")),
+                    str(r.get("Correo","")),
+                    str(r.get("Celular","")),
+                    int(r.get("Monedas") or 0),
+                    str(r.get("Inventario","")),
+                    int(r.get("Nivel_Max") or 1),
+                    str(r.get("Fecha_Vence","")),
+                    str(r.get("Grado","")),
+                    str(r.get("Maestro_Licencia","")),
+                    int(r.get("Mundos_Completados") or 0),
+                    str(r.get("Fallos_Tablas","{}")),
+                    int(r.get("Tiempo_Total_Min") or 0),
+                    int(r.get("Reset_Forzado") or 0),
+                ))
+                importados += 1
+            except Exception as e:
+                print(f"[Sheets] Error importando {lic}: {e}")
+        conn.commit()
+        conn.close()
+        print(f"[Sheets] ✅ Importados {importados} registros desde Google Sheets")
+    except Exception as e:
+        print(f"[Sheets] Error al cargar licencias: {e}")
+
+def gs_guardar_licencia(licencia: str):
+    """Sincroniza una licencia de SQLite → Google Sheets."""
+    ws = _get_gs_sheet("Licencias")
+    if not ws:
+        return
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT * FROM Licencias WHERE Licencia=?", (licencia,)).fetchone()
+        conn.close()
+        if not row:
+            return
+        valores = [str(row[c] if row[c] is not None else "") for c in GS_COLS]
+        # Buscar si ya existe la fila
+        col_a = ws.col_values(1)  # columna Licencia
+        if licencia in col_a:
+            idx = col_a.index(licencia) + 1
+            ws.update(f"A{idx}", [valores])
+        else:
+            ws.append_row(valores)
+        print(f"[Sheets] Guardado: {licencia}")
+    except Exception as e:
+        print(f"[Sheets] Error guardando {licencia}: {e}")
+
 app = FastAPI(title="Aventura de Tablas API", version="3.0.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_credentials=True,
@@ -559,6 +667,7 @@ async def _loop_backup_automatico():
 
 @app.on_event("startup")
 async def startup_event():
+    gs_cargar_licencias()               # Restaurar desde Sheets si DB vacía
     asyncio.create_task(_loop_backup_automatico())
 
 # ─── ENDPOINTS ────────────────────────────────────────────────
@@ -774,6 +883,7 @@ async def actualizar_progreso(data: ActualizarProgreso, bg: BackgroundTasks):
                 if mae: maestro_nombre = mae["Nombre"] or ""
             bg.add_task(email_progreso, nombre, correo, 10, fallos, True, maestro_nombre)
 
+        bg.add_task(gs_guardar_licencia, data.licencia.strip())
         return {"ok": True}
     except HTTPException:
         raise
@@ -937,6 +1047,7 @@ def crear_licencia(data: CrearLicencia):
               data.nombre or "", data.correo or "", data.celular or "",
               data.grado or "", data.maestro_licencia or ""))
         conn.commit()
+        gs_guardar_licencia(data.codigo.strip())
         return {"ok": True}
     except sqlite3.IntegrityError:
         raise HTTPException(409, f"Ya existe la licencia '{data.codigo}'.")
@@ -960,6 +1071,7 @@ def editar_licencia(data: EditarLicencia):
               data.grado or "", data.maestro_licencia or "",
               data.licencia.strip()))
         conn.commit()
+        gs_guardar_licencia(data.licencia.strip())
         return {"ok": True}
     except Exception as e:
         raise HTTPException(500, str(e))
@@ -1003,6 +1115,7 @@ async def activar_licencia(data: AccionLicencia, bg: BackgroundTasks):
             )
             enviado = True
 
+        bg.add_task(gs_guardar_licencia, data.codigo.strip())
         return {"ok": True, "correo_enviado": enviado}
     finally:
         conn.close()
