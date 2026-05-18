@@ -44,6 +44,11 @@ export default function AdminPage() {
   const [pwConfirm, setPwConfirm] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
 
+  // Backup base de datos
+  const [backupLoading, setBackupLoading]   = useState(false);
+  const [importando,    setImportando]      = useState(false);
+  const importRef = useRef();
+
   // Reporte seleccionado para imprimir
   const [reporteSeleccionado, setReporteSeleccionado] = useState(null);
   const printRef = useRef();
@@ -157,6 +162,41 @@ export default function AdminPage() {
     } catch (e) {
       toast.error(`❌ ${e.response?.data?.detail || "Error al cambiar"}`);
     } finally { setPwLoading(false); }
+  };
+
+  // ── Backup de base de datos ──────────────────────────────────
+  const descargarDB = () => {
+    window.open(`${API}/api/admin/exportar-db?licencia=${encodeURIComponent(store.licencia)}`, "_blank");
+  };
+
+  const backupPorEmail = async () => {
+    setBackupLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/api/admin/backup-ahora?licencia=${encodeURIComponent(store.licencia)}`);
+      toast.success("📧 Backup enviado a tu correo");
+    } catch (e) {
+      toast.error(`❌ ${e.response?.data?.detail || "Error al enviar backup"}`);
+    } finally { setBackupLoading(false); }
+  };
+
+  const restaurarDB = async (e) => {
+    const archivo = e.target.files?.[0];
+    if (!archivo) return;
+    if (!archivo.name.endsWith(".db")) { toast.error("Solo archivos .db son válidos"); return; }
+    if (!window.confirm(`¿Restaurar la base de datos con "${archivo.name}"? Esto reemplazará TODOS los datos actuales.`)) return;
+    setImportando(true);
+    const form = new FormData();
+    form.append("archivo", archivo);
+    try {
+      const { data } = await axios.post(
+        `${API}/api/admin/importar-db?licencia=${encodeURIComponent(store.licencia)}`,
+        form, { headers: { "Content-Type": "multipart/form-data" } }
+      );
+      toast.success(`✅ ${data.mensaje}`);
+      cargar();
+    } catch (e) {
+      toast.error(`❌ ${e.response?.data?.detail || "Error al restaurar"}`);
+    } finally { setImportando(false); importRef.current.value = ""; }
   };
 
   const imprimirReporte = (rep) => {
@@ -872,13 +912,57 @@ ${contenido}
             </div>
 
             <div style={{ borderTop:"1px solid rgba(255,255,255,0.08)", margin:"24px 0 18px" }} />
+
+            {/* ── Backup de base de datos ── */}
+            <h3 style={{ fontFamily:"Orbitron,monospace", color:"#00f5ff", marginBottom:6, fontSize:14 }}>🗄️ Respaldo de Base de Datos</h3>
+            <p style={{ fontFamily:"Nunito,sans-serif", color:"rgba(255,255,255,0.4)", fontSize:12, marginBottom:14, lineHeight:1.6 }}>
+              El sistema envía un backup automático a tu correo cada 6 horas. También puedes hacerlo manualmente.
+            </p>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
+              {/* Descargar DB */}
+              <button onClick={descargarDB}
+                style={{ display:"flex", alignItems:"center", gap:10, background:"rgba(0,245,255,0.08)", border:"1px solid rgba(0,245,255,0.3)", borderRadius:12, padding:"12px 16px", cursor:"pointer", color:"#00f5ff", fontFamily:"Nunito,sans-serif", fontSize:14, fontWeight:700, textAlign:"left" }}>
+                <span style={{ fontSize:22 }}>💾</span>
+                <div>
+                  <div>Descargar base de datos</div>
+                  <div style={{ fontSize:11, color:"rgba(0,245,255,0.5)", fontWeight:400 }}>Guarda el archivo .db antes de actualizar el sistema</div>
+                </div>
+              </button>
+
+              {/* Backup por email */}
+              <button onClick={backupPorEmail} disabled={backupLoading}
+                style={{ display:"flex", alignItems:"center", gap:10, background:"rgba(162,155,254,0.08)", border:"1px solid rgba(162,155,254,0.3)", borderRadius:12, padding:"12px 16px", cursor:"pointer", color:"#a29bfe", fontFamily:"Nunito,sans-serif", fontSize:14, fontWeight:700, textAlign:"left", opacity: backupLoading ? 0.6 : 1 }}>
+                <span style={{ fontSize:22 }}>📧</span>
+                <div>
+                  <div>{backupLoading ? "Enviando..." : "Enviar backup por correo ahora"}</div>
+                  <div style={{ fontSize:11, color:"rgba(162,155,254,0.5)", fontWeight:400 }}>Recibirás el archivo .db en tu email</div>
+                </div>
+              </button>
+
+              {/* Restaurar DB */}
+              <input type="file" accept=".db" ref={importRef} onChange={restaurarDB} style={{ display:"none" }} />
+              <button onClick={() => importRef.current?.click()} disabled={importando}
+                style={{ display:"flex", alignItems:"center", gap:10, background:"rgba(255,165,0,0.08)", border:"1px solid rgba(255,165,0,0.3)", borderRadius:12, padding:"12px 16px", cursor:"pointer", color:"#ffa500", fontFamily:"Nunito,sans-serif", fontSize:14, fontWeight:700, textAlign:"left", opacity: importando ? 0.6 : 1 }}>
+                <span style={{ fontSize:22 }}>📂</span>
+                <div>
+                  <div>{importando ? "Restaurando..." : "Restaurar desde archivo .db"}</div>
+                  <div style={{ fontSize:11, color:"rgba(255,165,0,0.5)", fontWeight:400 }}>Sube un backup para recuperar todos los datos</div>
+                </div>
+              </button>
+            </div>
+
+            <div style={{ background:"rgba(57,255,20,0.06)", border:"1px solid rgba(57,255,20,0.2)", borderRadius:10, padding:"10px 14px", fontFamily:"Nunito,sans-serif", fontSize:12, color:"rgba(57,255,20,0.7)", lineHeight:1.8 }}>
+              ✅ Backup automático activo — cada 6 horas llega a tu correo<br/>
+              📊 {alumnos.length} alumnos · {maestros.length} maestros · {padres.length} padres registrados
+            </div>
+
+            <div style={{ borderTop:"1px solid rgba(255,255,255,0.08)", margin:"20px 0 14px" }} />
             <h3 style={{ fontFamily:"Orbitron,monospace", color:"#a29bfe", marginBottom:8, fontSize:13 }}>ℹ️ Sistema</h3>
             <div style={{ fontFamily:"Nunito,sans-serif", fontSize:12, color:"rgba(255,255,255,0.35)", lineHeight:2.2 }}>
-              <div>📦 Base de datos: <strong style={{ color:"#00f5ff" }}>SQLite local</strong></div>
-              <div>📂 Archivo: <strong style={{ color:"#00f5ff" }}>backend/aventura_tablas.db</strong></div>
-              <div>💾 Datos guardados en tu computadora</div>
-              <div>🔄 Sin necesidad de internet para el juego</div>
-              <div>📊 Total alumnos: <strong style={{ color:"#39ff14" }}>{alumnos.length}</strong> | Maestros: <strong style={{ color:"#a29bfe" }}>{maestros.length}</strong> | Padres: <strong style={{ color:"#fd79a8" }}>{padres.length}</strong></div>
+              <div>📦 Base de datos: <strong style={{ color:"#00f5ff" }}>SQLite en Render</strong></div>
+              <div>🔄 Backup automático: <strong style={{ color:"#39ff14" }}>cada 6 horas por email</strong></div>
+              <div>🌐 Servidor siempre activo con UptimeRobot</div>
             </div>
           </motion.div>
         )}
