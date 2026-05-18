@@ -5,7 +5,7 @@ Incluye: sesiones, maestros/alumnos, reportes, emails automáticos, auto-código
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Union
 import sqlite3, os, json, re, random, string, smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
