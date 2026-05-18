@@ -709,6 +709,29 @@ def debug_solicitudes():
     finally:
         conn.close()
 
+@app.get("/api/debug-sheets")
+def debug_sheets():
+    """Verifica la conexión con Google Sheets."""
+    if not GS_CREDS_JSON:
+        return {"error": "GOOGLE_CREDENTIALS_JSON no configurado en Render"}
+    if not GS_SHEET_ID:
+        return {"error": "GOOGLE_SHEET_ID no configurado en Render"}
+    try:
+        ws = _get_gs_sheet("Licencias")
+        if not ws:
+            return {"error": "No se pudo conectar a Google Sheets"}
+        encabezados = ws.row_values(1)
+        total_filas = len(ws.get_all_values()) - 1
+        return {
+            "ok": True,
+            "sheet_id": GS_SHEET_ID,
+            "hoja": "Licencias",
+            "encabezados": encabezados,
+            "filas_de_datos": total_filas,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/test")
 def test_conexion():
     """Endpoint para verificar que el backend está corriendo."""
