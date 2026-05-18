@@ -5,7 +5,7 @@ Incluye: sesiones, maestros/alumnos, reportes, emails automáticos, auto-código
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Any
 import sqlite3, os, json, re, random, string, smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -220,12 +220,12 @@ class RegistroGrupo(BaseModel):
     tutor_correo: str
     tutor_celular: str
     tutor_escuela: Optional[str] = ""
-    tutor_tipo: str  # "maestro" | "padre"
-    dependientes: list  # [{nombre, correo, grado}]
+    tutor_tipo: str
+    dependientes: List[Any] = []
 
 class AgregarDependientes(BaseModel):
     tutor_licencia: str
-    dependientes: list  # [{nombre, correo, grado}]
+    dependientes: List[Any] = []
 
 class ActivarGrupo(BaseModel):
     solicitud_id: int
@@ -236,7 +236,7 @@ class BloquearLicencia(BaseModel):
 
 class ReiniciarMundos(BaseModel):
     licencia: str
-    mundos: Optional[list] = None   # None = reinicio total de mundos; lista de índices = individual; False = no reiniciar mundos
+    mundos: Optional[List[Any]] = None
     reiniciar_monedas: bool = False
     reiniciar_inventario: bool = False
 
