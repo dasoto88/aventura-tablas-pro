@@ -25,7 +25,7 @@ app.add_middleware(
 EMAIL_FROM   = os.getenv("EMAIL_REMITENTE", "pixelimpresorasap@gmail.com")
 EMAIL_PASS   = os.getenv("EMAIL_PASSWORD", "")
 RESEND_KEY   = os.getenv("RESEND_API_KEY", "")
-RESEND_FROM  = os.getenv("RESEND_FROM", "Aventura de Tablas <onboarding@resend.dev>")
+BREVO_KEY    = os.getenv("BREVO_API_KEY", "")
 LINK_MP    = os.getenv("LINK_MERCADO_PAGO", "https://mpago.la/1HSsTdv")
 DATOS_BBVA = os.getenv("DATOS_TRANSFERENCIA",
     "Banco: BBVA | Cuenta: 4152314169570341 | Titular: David Soto Beltran | Concepto: AventuraTablas + Nombre alumno")
@@ -244,36 +244,33 @@ class ReiniciarMundos(BaseModel):
     reiniciar_inventario: bool = False
 
 # ─── EMAIL ────────────────────────────────────────────────────
-def _enviar_via_resend(destinatario: str, asunto: str, html: str) -> bool:
-    """Envía email usando la API HTTP de Resend (nunca bloqueada por Render)."""
-    if not RESEND_KEY:
+def _enviar_via_brevo(destinatario: str, asunto: str, html: str) -> bool:
+    """Envía email usando Brevo API — gratis, sin restricciones de dominio."""
+    if not BREVO_KEY:
         return False
     payload = json.dumps({
-        "from":    RESEND_FROM,
-        "to":      [destinatario],
-        "subject": asunto,
-        "html":    html,
+        "sender":      {"name": "Aventura de Tablas", "email": EMAIL_FROM},
+        "to":          [{"email": destinatario}],
+        "subject":     asunto,
+        "htmlContent": html,
     }).encode("utf-8")
     req = urllib.request.Request(
-        "https://api.resend.com/emails",
+        "https://api.brevo.com/v3/smtp/email",
         data=payload,
-        headers={
-            "Authorization": f"Bearer {RESEND_KEY}",
-            "Content-Type":  "application/json",
-        },
+        headers={"api-key": BREVO_KEY, "Content-Type": "application/json"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             ok = resp.status in (200, 201)
-            print(f"[Email Resend {'OK' if ok else 'FAIL'}] → {destinatario} (status {resp.status})")
+            print(f"[Email Brevo {'OK' if ok else 'FAIL'}] → {destinatario}")
             return ok
     except urllib.error.HTTPError as e:
         body = e.read().decode()
-        print(f"[Email Resend Error] {e.code} {body}")
+        print(f"[Email Brevo Error] {e.code} {body}")
         return False
     except Exception as e:
-        print(f"[Email Resend Error] {e}")
+        print(f"[Email Brevo Error] {e}")
         return False
 
 def _enviar_via_smtp(destinatario: str, asunto: str, html: str) -> bool:
@@ -307,13 +304,13 @@ def _enviar_via_smtp(destinatario: str, asunto: str, html: str) -> bool:
 def enviar_correo(destinatario: str, asunto: str, html: str) -> bool:
     if not destinatario:
         return False
-    # Resend primero (HTTPS, siempre funciona en Render)
-    if RESEND_KEY:
-        return _enviar_via_resend(destinatario, asunto, html)
+    # Brevo primero (HTTPS, sin restricciones de dominio)
+    if BREVO_KEY:
+        return _enviar_via_brevo(destinatario, asunto, html)
     # Respaldo: Gmail SMTP
     if EMAIL_PASS:
         return _enviar_via_smtp(destinatario, asunto, html)
-    print("[Email] Ningún método configurado (RESEND_API_KEY o EMAIL_PASSWORD)")
+    print("[Email] Ningún método configurado (BREVO_API_KEY o EMAIL_PASSWORD)")
     return False
 
 # ─── TEMPLATES ────────────────────────────────────────────────
@@ -504,12 +501,11 @@ def root():
 def debug_email():
     """Prueba de email — muestra configuración y resultado."""
     config = {
-        "RESEND_API_KEY":  "configurado ✓" if RESEND_KEY  else "❌ NO configurado",
+        "BREVO_API_KEY":   "configurado ✓" if BREVO_KEY   else "❌ NO configurado",
         "EMAIL_PASSWORD":  "configurado ✓" if EMAIL_PASS  else "❌ NO configurado",
         "EMAIL_REMITENTE": EMAIL_FROM,
-        "RESEND_FROM":     RESEND_FROM,
     }
-    if not RESEND_KEY and not EMAIL_PASS:
+    if not BREVO_KEY and not EMAIL_PASS:
         return {"error": "Ningún método de email configurado", **config}
     resultado = enviar_correo(
         EMAIL_FROM,
