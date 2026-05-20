@@ -252,13 +252,22 @@ def email_recuperacion(nombre: str, licencia: str) -> str:
 def root():
     return {"status": "ok", "app": "Aventura de Tablas Pro v2.1", "db": "SQLite local"}
 
+# ── Keep-Alive: evita que Render duerma el servidor ───────────
 @app.get("/api/ping")
 def ping():
-    """
-    Endpoint de keep-alive. El frontend lo llama cada 10 min
-    para evitar que Render apague el servidor por inactividad.
-    """
+    """El frontend lo llama cada 5 min para mantener Render despierto."""
     return {"pong": True, "ts": datetime.now().isoformat()}
+
+@app.get("/api/health")
+def health():
+    """Verifica que el servidor y la BD responden correctamente."""
+    try:
+        conn = get_db()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        return {"status": "healthy", "db": "ok", "ts": datetime.now().isoformat()}
+    except Exception as e:
+        return {"status": "degraded", "error": str(e)}
 
 @app.get("/api/health")
 def health():

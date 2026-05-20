@@ -4,18 +4,41 @@ import toast from "react-hot-toast";
 import axios from "axios";
 import { useGameStore } from "../utils/store";
 import soundManager from "../utils/sounds";
+import { iniciarKeepAlive, wakeUpServer } from "../utils/keepAlive";
 
 const API = process.env.REACT_APP_API_URL || "";
 const TABS = ["🎮 JUGAR", "📝 REGISTRO", "🎁 DEMO", "ℹ️ INFO"];
 
 const DATOS_BBVA = "Banco: BBVA | Cuenta: 4152314169570341 | Titular: David Soto Beltrán | Concepto: AventuraTablas + Nombre";
 
+// Estados del servidor
+const SRV = { VERIFICANDO: "verificando", OK: "ok", DESPERTANDO: "despertando", ERROR: "error" };
+
 export default function LoginPage() {
   const [tab, setTab] = useState(0);
   const { iniciarSesion, iniciarDemo } = useGameStore();
   const [musicStarted, setMusicStarted] = useState(false);
   const [pagoEstado, setPagoEstado] = useState(null); // "ok" | "error" | "pendiente"
+  const [servidor, setServidor] = useState(SRV.VERIFICANDO);
 
+  // ── Despertar servidor al cargar + activar keep-alive ────────
+  useEffect(() => {
+    let cancelado = false;
+    async function verificar() {
+      const t = setTimeout(() => { if (!cancelado) setServidor(SRV.DESPERTANDO); }, 3000);
+      const ok = await wakeUpServer();
+      clearTimeout(t);
+      if (!cancelado) {
+        setServidor(ok ? SRV.OK : SRV.ERROR);
+        if (!ok) setTimeout(verificar, 15_000);
+      }
+    }
+    verificar();
+    iniciarKeepAlive();
+    return () => { cancelado = true; };
+  }, []);
+
+  // ── Detectar estado de pago en URL ────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
@@ -41,6 +64,40 @@ export default function LoginPage() {
     <div className="page" onClick={startMusic}
       style={{ background: "radial-gradient(ellipse at center, #1a0035 0%, #030010 70%)", justifyContent: "center", alignItems: "center" }}>
       <Stars />
+
+      {/* ── Banner "Despertando servidor" ── visible solo si tarda */}
+      <AnimatePresence>
+        {servidor === SRV.DESPERTANDO && (
+          <motion.div key="srv-banner"
+            initial={{ opacity:0, y:-50 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-50 }}
+            style={{ position:"fixed", top:0, left:0, right:0, zIndex:9999,
+              background:"linear-gradient(90deg,#1a004a,#0d0030,#1a004a)",
+              borderBottom:"2px solid rgba(160,100,255,0.7)",
+              padding:"11px 20px", display:"flex", alignItems:"center",
+              justifyContent:"center", gap:12 }}>
+            <motion.div animate={{ rotate:360 }} transition={{ duration:1.1, repeat:Infinity, ease:"linear" }}
+              style={{ width:18, height:18, border:"3px solid rgba(162,155,254,0.3)",
+                borderTopColor:"#a29bfe", borderRadius:"50%", flexShrink:0 }} />
+            <span style={{ fontFamily:"Nunito,sans-serif", color:"#d0b8ff", fontSize:14, fontWeight:700 }}>
+              ⚡ Despertando el servidor... solo tarda unos segundos
+            </span>
+            <motion.span animate={{ opacity:[1,0.2,1] }} transition={{ duration:1.2, repeat:Infinity }}
+              style={{ color:"#a29bfe" }}>●●●</motion.span>
+          </motion.div>
+        )}
+        {servidor === SRV.ERROR && (
+          <motion.div key="srv-error"
+            initial={{ opacity:0, y:-50 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-50 }}
+            style={{ position:"fixed", top:0, left:0, right:0, zIndex:9999,
+              background:"linear-gradient(90deg,#3d0000,#200000)",
+              borderBottom:"2px solid rgba(255,50,50,0.5)",
+              padding:"11px 20px", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <span style={{ fontFamily:"Nunito,sans-serif", color:"#ff9090", fontSize:14, fontWeight:700 }}>
+              ⚠️ Servidor tardando en responder — reintentando automáticamente...
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
         style={{ width: "100%", maxWidth: 540, padding: "0 16px", zIndex: 10 }}>
 
@@ -84,9 +141,21 @@ export default function LoginPage() {
           </AnimatePresence>
         </div>
 
-        <p style={{ textAlign:"center", marginTop:20, color:"rgba(255,255,255,0.2)", fontFamily:"Rajdhani,sans-serif", fontSize:12 }}>
-          Aventura de Tablas Pro v3.0 • Para niños de 1° a 3° grado
-        </p>
+        <div style={{ textAlign:"center", marginTop:20, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+          <motion.div
+            animate={servidor === SRV.OK ? { opacity:1 } : { opacity:[1,0.3,1] }}
+            transition={{ duration:1.3, repeat:Infinity }}
+            style={{ width:7, height:7, borderRadius:"50%", flexShrink:0,
+              background: servidor===SRV.OK ? "#00ff88" : servidor===SRV.ERROR ? "#ff3355" : "#ffb300" }}
+          />
+          <p style={{ color:"rgba(255,255,255,0.2)", fontFamily:"Rajdhani,sans-serif", fontSize:12, margin:0 }}>
+            Aventura de Tablas Pro v3.0 • Para niños de 1° a 3° grado
+            {" • "}
+            <span style={{ color: servidor===SRV.OK ? "rgba(0,255,136,0.45)" : servidor===SRV.ERROR ? "rgba(255,51,85,0.5)" : "rgba(255,179,0,0.45)" }}>
+              {servidor===SRV.OK ? "Servidor activo" : servidor===SRV.ERROR ? "Sin conexión" : "Despertando..."}
+            </span>
+          </p>
+        </div>
       </motion.div>
     </div>
   );
