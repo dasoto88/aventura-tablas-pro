@@ -49,6 +49,11 @@ export default function AdminPage() {
   const [importando,    setImportando]      = useState(false);
   const importRef = useRef();
 
+  // Importar desde Google Sheets (bulk CSV)
+  const [modalImportGS, setModalImportGS]   = useState(false);
+  const [csvTexto,      setCsvTexto]        = useState("");
+  const [importGSCargando, setImportGSCargando] = useState(false);
+
   // Reporte seleccionado para imprimir
   const [reporteSeleccionado, setReporteSeleccionado] = useState(null);
   const printRef = useRef();
@@ -209,6 +214,43 @@ export default function AdminPage() {
     } catch (e) {
       toast.error(`❌ ${e.response?.data?.detail || "Error al restaurar"}`);
     } finally { setImportando(false); importRef.current.value = ""; }
+  };
+
+  // ── Importar usuarios desde Google Sheets (pegar CSV) ────────
+  const importarDesdeCSV = async () => {
+    if (!csvTexto.trim()) { toast.error("Pega los datos primero"); return; }
+    setImportGSCargando(true);
+    try {
+      // Parsear CSV o líneas: Licencia,Activa,Tipo,Nombre,Correo,Celular,Monedas,Nivel_Max
+      const lineas = csvTexto.trim().split("\n").filter(l => l.trim());
+      const licencias = [];
+      for (const linea of lineas) {
+        const cols = linea.split(/[,\t]/).map(c => c.trim().replace(/^"|"$/g, ""));
+        if (cols.length < 1 || !cols[0]) continue;
+        // Saltar cabecera si existe
+        if (cols[0].toLowerCase() === "licencia" || cols[0].toLowerCase() === "codigo") continue;
+        licencias.push({
+          licencia:   cols[0] || "",
+          activa:     cols[1]?.toUpperCase() === "SI" ? "SI" : (cols[1] || "SI"),
+          tipo:       cols[2]?.toLowerCase() || "alumno",
+          nombre:     cols[3] || "",
+          correo:     cols[4] || "",
+          celular:    cols[5] || "",
+          monedas:    parseInt(cols[6]) || 0,
+          inventario: cols[7] || "",
+          nivel_max:  parseInt(cols[8]) || 1,
+        });
+      }
+      if (licencias.length === 0) { toast.error("No se encontraron datos válidos"); return; }
+      const { data } = await axios.post(`${API}/api/admin/importar-licencias`, { licencias });
+      toast.success(`✅ ${data.creadas} creadas · ${data.actualizadas} actualizadas`);
+      if (data.errores?.length) toast.error(`⚠️ ${data.errores.length} errores: ${data.errores[0]}`);
+      setModalImportGS(false);
+      setCsvTexto("");
+      cargar();
+    } catch (e) {
+      toast.error(`❌ ${e.response?.data?.detail || "Error al importar"}`);
+    } finally { setImportGSCargando(false); }
   };
 
   const altaDirecta = async () => {
@@ -1155,6 +1197,16 @@ ${contenido}
                   <div style={{ fontSize:11, color:"rgba(255,165,0,0.5)", fontWeight:400 }}>Sube un backup para recuperar todos los datos</div>
                 </div>
               </button>
+
+              {/* Importar desde Google Sheets */}
+              <button onClick={() => setModalImportGS(true)}
+                style={{ display:"flex", alignItems:"center", gap:10, background:"rgba(52,211,153,0.08)", border:"1px solid rgba(52,211,153,0.35)", borderRadius:12, padding:"12px 16px", cursor:"pointer", color:"#34d399", fontFamily:"Nunito,sans-serif", fontSize:14, fontWeight:700, textAlign:"left" }}>
+                <span style={{ fontSize:22 }}>📊</span>
+                <div>
+                  <div>Importar usuarios desde Google Sheets</div>
+                  <div style={{ fontSize:11, color:"rgba(52,211,153,0.5)", fontWeight:400 }}>Pega los datos del Sheet para cargar usuarios en masa</div>
+                </div>
+              </button>
             </div>
 
             <div style={{ background:"rgba(57,255,20,0.06)", border:"1px solid rgba(57,255,20,0.2)", borderRadius:10, padding:"10px 14px", fontFamily:"Nunito,sans-serif", fontSize:12, color:"rgba(57,255,20,0.7)", lineHeight:1.8 }}>
@@ -1176,6 +1228,52 @@ ${contenido}
           <button onClick={cargar} className="btn btn-neon btn-sm">🔄 Actualizar datos</button>
         </div>
       </div>
+
+      {/* ─── MODAL IMPORTAR GOOGLE SHEETS ───────────────────────── */}
+      <AnimatePresence>
+        {modalImportGS && (
+          <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+            onClick={() => setModalImportGS(false)}
+            style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+            <motion.div initial={{ scale:0.9, y:30 }} animate={{ scale:1, y:0 }} exit={{ scale:0.9 }}
+              onClick={e => e.stopPropagation()}
+              style={{ background:"#0a1520", border:"1px solid rgba(52,211,153,0.4)", borderRadius:20, padding:28, width:"100%", maxWidth:600, maxHeight:"90vh", overflowY:"auto" }}>
+
+              <h2 style={{ fontFamily:"Orbitron,monospace", color:"#34d399", marginBottom:6, fontSize:16 }}>
+                📊 Importar desde Google Sheets
+              </h2>
+              <p style={{ fontFamily:"Nunito,sans-serif", color:"rgba(255,255,255,0.5)", fontSize:13, marginBottom:16, lineHeight:1.6 }}>
+                Ve a Google Sheets → selecciona las filas de la pestaña <strong style={{color:"#34d399"}}>Licencias</strong>
+                → copia (Ctrl+C) → pega aquí abajo (Ctrl+V).<br/>
+                Formato esperado: <code style={{color:"#00f5ff", fontSize:11}}>Licencia, Activa, Tipo, Nombre, Correo, Celular, Monedas, Inventario, Nivel_Max</code>
+              </p>
+
+              <textarea
+                value={csvTexto}
+                onChange={e => setCsvTexto(e.target.value)}
+                placeholder={"Pega aquí el contenido copiado de Google Sheets...\n\nEjemplo:\nDEBO7139\tSI\talumno\tDeborah Soto\tdasoto@gmail.com\t6331124596\t0\t\t1\nDEBO0061\tSI\talumno\tDeborah Soto\tdasoto@gmail.com\t6331124596\t0\t\t1"}
+                style={{ width:"100%", minHeight:180, background:"#050a0f", color:"#00ff88", border:"1px solid rgba(52,211,153,0.3)", borderRadius:10, padding:12, fontFamily:"Courier,monospace", fontSize:12, resize:"vertical", boxSizing:"border-box" }}
+              />
+
+              <div style={{ display:"flex", gap:10, marginTop:16 }}>
+                <button onClick={importarDesdeCSV} disabled={importGSCargando}
+                  style={{ flex:1, background:"#34d399", color:"#050a0f", border:"none", borderRadius:12, padding:"12px 0", fontFamily:"Nunito,sans-serif", fontSize:14, fontWeight:800, cursor:"pointer", opacity: importGSCargando ? 0.6 : 1 }}>
+                  {importGSCargando ? "⏳ Importando..." : "✅ Importar usuarios"}
+                </button>
+                <button onClick={() => { setModalImportGS(false); setCsvTexto(""); }}
+                  style={{ background:"rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.5)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:12, padding:"12px 20px", fontFamily:"Nunito,sans-serif", fontSize:13, cursor:"pointer" }}>
+                  Cancelar
+                </button>
+              </div>
+
+              <div style={{ marginTop:14, background:"rgba(0,245,255,0.06)", border:"1px solid rgba(0,245,255,0.2)", borderRadius:10, padding:"10px 14px", fontFamily:"Nunito,sans-serif", fontSize:12, color:"rgba(0,245,255,0.7)", lineHeight:1.8 }}>
+                💡 <strong>Tip:</strong> Los usuarios que ya existen se actualizarán. Los nuevos se crearán automáticamente.
+                No necesitas incluir la fila del encabezado (Licencia, Activa...) pero no pasa nada si la incluyes.
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ─── MODAL REINICIAR ALUMNO ──────────────────────────── */}
       <AnimatePresence>

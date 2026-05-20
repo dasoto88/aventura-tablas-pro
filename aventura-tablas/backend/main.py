@@ -1,15 +1,18 @@
 """
-Aventura de Tablas Pro v2.1 — Backend con SQLite (base de datos local, sin Google Sheets)
+Aventura de Tablas Pro v2.1 — Backend con SQLite
 """
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import sqlite3
 import os
 import smtplib
+import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -124,6 +127,20 @@ class CambiarAdminLicencia(BaseModel):
 class RecuperarLicencia(BaseModel):
     correo: Optional[str] = ""
     celular: Optional[str] = ""
+
+class LicenciaImport(BaseModel):
+    licencia: str
+    activa: Optional[str] = "SI"
+    tipo: Optional[str] = "alumno"
+    nombre: Optional[str] = ""
+    correo: Optional[str] = ""
+    celular: Optional[str] = ""
+    monedas: Optional[int] = 0
+    inventario: Optional[str] = ""
+    nivel_max: Optional[int] = 1
+
+class ImportarLicencias(BaseModel):
+    licencias: List[LicenciaImport]
 
 # ─── EMAIL ───────────────────────────────────────────────────
 def enviar_correo(destinatario: str, asunto: str, html: str) -> bool:
@@ -263,20 +280,10 @@ def health():
     """Verifica que el servidor y la BD responden correctamente."""
     try:
         conn = get_db()
-        conn.execute("SELECT 1").fetchone()
+        total = conn.execute("SELECT COUNT(*) FROM Licencias").fetchone()[0]
         conn.close()
-        return {"status": "healthy", "db": "ok", "ts": datetime.now().isoformat()}
-    except Exception as e:
-        return {"status": "degraded", "error": str(e)}
-
-@app.get("/api/health")
-def health():
-    """Verifica que la BD también responde."""
-    try:
-        conn = get_db()
-        conn.execute("SELECT 1").fetchone()
-        conn.close()
-        return {"status": "healthy", "db": "ok", "ts": datetime.now().isoformat()}
+        return {"status": "healthy", "db": "ok", "licencias": total,
+                "ts": datetime.now().isoformat()}
     except Exception as e:
         return {"status": "degraded", "error": str(e)}
 
@@ -490,3 +497,234 @@ def listar_solicitudes():
         return {"solicitudes": [dict(r) for r in rows]}
     finally:
         conn.close()
+
+# ── Admin — importar licencias en masa (desde Google Sheets / CSV) ──
+@app.post("/api/admin/importar-licencias")
+def importar_licencias(data: ImportarLicencias):
+    """
+    Importa múltiples licencias de una vez.
+    Úsalo para migrar datos desde Google Sheets.
+    Las licencias ya existentes se ACTUALIZAN, las nuevas se CREAN.
+    """
+    conn = get_db()
+    try:
+        creadas    = 0
+        actualizadas = 0
+        errores    = []
+
+        for lic in data.licencias:
+            try:
+                existente = conn.execute(
+                    "SELECT id FROM Licencias WHERE Licencia=?",
+                    (lic.licencia.strip(),)
+                ).fetchone()
+
+                if existente:
+                    conn.execute("""
+                        UPDATE Licencias
+                        SET Activa=?, Tipo=?, Nombre=?, Correo=?, Celular=?,
+                            Monedas=?, Inventario=?, Nivel_Max=?
+                        WHERE Licencia=?
+                    """, (
+                        lic.activa, lic.tipo, lic.nombre or "",
+                        lic.correo or "", lic.celular or "",
+                        lic.monedas or 0, lic.inventario or "",
+                        lic.nivel_max or 1,
+                        lic.licencia.strip()
+                    ))
+                    actualizadas += 1
+                else:
+                    conn.execute("""
+                        INSERT INTO Licencias
+                            (Licencia, Activa, Tipo, Nombre, Correo, Celular,
+                             Monedas, Inventario, Nivel_Max)
+                        VALUES (?,?,?,?,?,?,?,?,?)
+                    """, (
+                        lic.licencia.strip(), lic.activa, lic.tipo,
+                        lic.nombre or "", lic.correo or "", lic.celular or "",
+                        lic.monedas or 0, lic.inventario or "",
+                        lic.nivel_max or 1
+                    ))
+                    creadas += 1
+            except Exception as e:
+                errores.append(f"{lic.licencia}: {str(e)}")
+
+        conn.commit()
+        return {
+            "ok": True,
+            "creadas": creadas,
+            "actualizadas": actualizadas,
+            "errores": errores,
+        }
+    finally:
+        conn.close()
+
+# ── Admin — backup de la base de datos por correo ─────────────
+def _hacer_backup_email(destinatario: str) -> dict:
+    """Envía la base de datos SQLite como adjunto al correo admin."""
+    try:
+        if not EMAIL_PASS:
+            return {"ok": False, "error": "EMAIL_PASSWORD no configurado en .env"}
+
+        if not DB_PATH.exists():
+            return {"ok": False, "error": "Base de datos no encontrada"}
+
+        # Leer y codificar DB
+        db_bytes = DB_PATH.read_bytes()
+        ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
+        nombre_adjunto = f"aventura_tablas_backup_{ts}.db"
+
+        # Generar reporte HTML del contenido
+        conn = get_db()
+        try:
+            licencias  = conn.execute("SELECT * FROM Licencias ORDER BY id").fetchall()
+            solicitudes = conn.execute("SELECT * FROM Solicitudes ORDER BY id DESC LIMIT 20").fetchall()
+        finally:
+            conn.close()
+
+        filas_lic = ""
+        for r in licencias:
+            filas_lic += f"""<tr>
+                <td style="padding:6px;border:1px solid #1a3550;color:#00D4FF;">{r['Licencia']}</td>
+                <td style="padding:6px;border:1px solid #1a3550;color:{'#00FF88' if r['Activa']=='SI' else '#FF3355'};">{r['Activa']}</td>
+                <td style="padding:6px;border:1px solid #1a3550;color:#D0E8F8;">{r['Tipo']}</td>
+                <td style="padding:6px;border:1px solid #1a3550;color:#D0E8F8;">{r['Nombre'] or ''}</td>
+                <td style="padding:6px;border:1px solid #1a3550;color:#D0E8F8;">{r['Correo'] or ''}</td>
+                <td style="padding:6px;border:1px solid #1a3550;color:#FFB300;">{r['Monedas'] or 0}</td>
+                <td style="padding:6px;border:1px solid #1a3550;color:#D0E8F8;">{r['Nivel_Max'] or 1}</td>
+            </tr>"""
+
+        html_body = f"""
+        <html><body style="background:#050A0F;font-family:Arial,sans-serif;color:#D0E8F8;padding:20px;">
+        <div style="max-width:800px;margin:0 auto;">
+          <div style="background:#0F1E2E;border-radius:12px;padding:20px;border:1px solid #00D4FF33;">
+            <h1 style="color:#00D4FF;margin:0;">📊 Backup Aventura de Tablas Pro</h1>
+            <p style="color:#4A6070;">Generado: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</p>
+          </div>
+
+          <div style="background:#0A1520;border-radius:12px;padding:20px;margin-top:16px;border:1px solid #1A3550;">
+            <h2 style="color:#00FF88;">👥 Licencias ({len(licencias)} total)</h2>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="background:#0F1E2E;">
+                  <th style="padding:8px;border:1px solid #1a3550;color:#00D4FF;text-align:left;">Licencia</th>
+                  <th style="padding:8px;border:1px solid #1a3550;color:#00D4FF;">Activa</th>
+                  <th style="padding:8px;border:1px solid #1a3550;color:#00D4FF;">Tipo</th>
+                  <th style="padding:8px;border:1px solid #1a3550;color:#00D4FF;text-align:left;">Nombre</th>
+                  <th style="padding:8px;border:1px solid #1a3550;color:#00D4FF;text-align:left;">Correo</th>
+                  <th style="padding:8px;border:1px solid #1a3550;color:#00D4FF;">Monedas</th>
+                  <th style="padding:8px;border:1px solid #1a3550;color:#00D4FF;">Nivel</th>
+                </tr>
+              </thead>
+              <tbody>{filas_lic}</tbody>
+            </table>
+          </div>
+
+          <div style="background:#0A1520;border-radius:12px;padding:16px;margin-top:16px;border:1px solid #1A3550;">
+            <p style="color:#4A6070;font-size:12px;margin:0;">
+              ⚠️ El archivo <strong>.db</strong> adjunto es la base de datos completa.<br>
+              Guárdala como respaldo. Para restaurarla, reemplaza el archivo
+              <code>aventura_tablas.db</code> en el servidor.
+            </p>
+          </div>
+        </div>
+        </body></html>
+        """
+
+        # Crear mensaje con adjunto
+        msg = MIMEMultipart("mixed")
+        msg["From"]    = EMAIL_FROM
+        msg["To"]      = destinatario
+        msg["Subject"] = f"🗄️ Backup AventuraTablas — {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+        msg.attach(MIMEText(html_body, "html"))
+
+        # Adjunto .db
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(db_bytes)
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition",
+                        f'attachment; filename="{nombre_adjunto}"')
+        msg.attach(part)
+
+        with smtplib.SMTP("smtp.gmail.com", 587) as s:
+            s.starttls()
+            s.login(EMAIL_FROM, EMAIL_PASS)
+            s.send_message(msg)
+
+        print(f"[Backup OK] Enviado a {destinatario} — {len(db_bytes)/1024:.1f} KB")
+        return {"ok": True, "bytes": len(db_bytes), "archivo": nombre_adjunto}
+
+    except Exception as e:
+        print(f"[Backup Error] {e}")
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/admin/backup-email")
+@app.get("/api/admin/backup-ahora")
+async def backup_email(bg: BackgroundTasks):
+    """
+    Envía la base de datos completa al correo del administrador.
+    Incluye tabla HTML con todas las licencias + archivo .db adjunto.
+    """
+    if not EMAIL_PASS:
+        raise HTTPException(500,
+            "EMAIL_PASSWORD no está configurado. "
+            "Agrega la variable en Render > Environment.")
+    bg.add_task(_hacer_backup_email, EMAIL_FROM)
+    return {
+        "ok": True,
+        "mensaje": f"Backup en proceso — llegará a {EMAIL_FROM} en unos segundos"
+    }
+
+# ── Admin — exportar/descargar base de datos ──────────────────
+from fastapi.responses import FileResponse, Response
+
+@app.get("/api/admin/exportar-db")
+def exportar_db():
+    """Descarga el archivo .db de la base de datos directamente."""
+    if not DB_PATH.exists():
+        raise HTTPException(404, "Base de datos no encontrada")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    nombre = f"aventura_tablas_backup_{ts}.db"
+    return FileResponse(
+        path=str(DB_PATH),
+        media_type="application/octet-stream",
+        filename=nombre
+    )
+
+# ── Admin — restaurar base de datos desde archivo ─────────────
+from fastapi import UploadFile, File
+import shutil
+
+@app.post("/api/admin/importar-db")
+async def importar_db(archivo: UploadFile = File(...)):
+    """
+    Restaura la base de datos desde un archivo .db subido.
+    CUIDADO: reemplaza TODOS los datos existentes.
+    """
+    if not archivo.filename.endswith(".db"):
+        raise HTTPException(400, "Solo se aceptan archivos .db")
+
+    # Hacer backup antes de restaurar
+    backup_path = DB_PATH.parent / f"aventura_tablas_PREVIO_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    if DB_PATH.exists():
+        shutil.copy2(str(DB_PATH), str(backup_path))
+
+    try:
+        contenido = await archivo.read()
+        DB_PATH.write_bytes(contenido)
+        # Verificar que la DB es válida
+        conn = get_db()
+        conn.execute("SELECT COUNT(*) FROM Licencias").fetchone()
+        conn.close()
+        return {
+            "ok": True,
+            "mensaje": f"Base de datos restaurada correctamente ({len(contenido)//1024} KB)",
+            "backup_previo": backup_path.name
+        }
+    except Exception as e:
+        # Revertir si algo salió mal
+        if backup_path.exists():
+            shutil.copy2(str(backup_path), str(DB_PATH))
+        raise HTTPException(500, f"Error al restaurar: {str(e)}")
