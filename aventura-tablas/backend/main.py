@@ -7,6 +7,9 @@ from pydantic import BaseModel
 from typing import Optional, List
 import sqlite3
 import os
+import threading
+import time
+import requests as _req
 import smtplib
 import base64
 from email.mime.text import MIMEText
@@ -18,6 +21,19 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+
+def _self_ping():
+    url = os.environ.get("RENDER_EXTERNAL_URL", "")
+    if not url:
+        return
+    while True:
+        time.sleep(60)
+        try:
+            _req.get(f"{url}/api/ping", timeout=10)
+        except Exception:
+            pass
+
+threading.Thread(target=_self_ping, daemon=True).start()
 
 app = FastAPI(title="Aventura de Tablas API", version="2.1.0")
 app.add_middleware(
