@@ -85,6 +85,54 @@ def init_db():
                 Escuela TEXT NOT NULL,
                 Estado  TEXT DEFAULT 'Pendiente'
             );
+            CREATE TABLE IF NOT EXISTS quest_guias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                licencia_subio TEXT NOT NULL,
+                tipo_subidor TEXT NOT NULL,
+                codigo_grupo TEXT DEFAULT '',
+                titulo TEXT NOT NULL,
+                materia TEXT DEFAULT '',
+                fecha_examen TEXT DEFAULT '',
+                texto_extraido TEXT NOT NULL,
+                dias_estudio INTEGER DEFAULT 5,
+                fecha_creacion TEXT NOT NULL,
+                activa INTEGER DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS quest_preguntas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guia_id INTEGER NOT NULL,
+                dia INTEGER NOT NULL,
+                tipo TEXT NOT NULL,
+                pregunta TEXT NOT NULL,
+                opcion_a TEXT DEFAULT '',
+                opcion_b TEXT DEFAULT '',
+                opcion_c TEXT DEFAULT '',
+                opcion_d TEXT DEFAULT '',
+                respuesta_correcta TEXT NOT NULL,
+                explicacion TEXT DEFAULT '',
+                dificultad INTEGER DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS quest_progreso (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                licencia_alumno TEXT NOT NULL,
+                guia_id INTEGER NOT NULL,
+                dia INTEGER NOT NULL,
+                fase TEXT NOT NULL,
+                completado INTEGER DEFAULT 0,
+                puntaje INTEGER DEFAULT 0,
+                errores INTEGER DEFAULT 0,
+                tiempo_segundos INTEGER DEFAULT 0,
+                fecha TEXT NOT NULL,
+                UNIQUE(licencia_alumno, guia_id, dia, fase)
+            );
+            CREATE TABLE IF NOT EXISTS quest_errores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                licencia_alumno TEXT NOT NULL,
+                guia_id INTEGER NOT NULL,
+                pregunta_id INTEGER NOT NULL,
+                respuesta_dada TEXT NOT NULL,
+                fecha TEXT NOT NULL
+            );
         """)
         # Crear admin por defecto si no existe
         admin_cfg = conn.execute("SELECT value FROM config WHERE key='admin_licencia'").fetchone()
@@ -744,3 +792,226 @@ async def importar_db(archivo: UploadFile = File(...)):
         if backup_path.exists():
             shutil.copy2(str(backup_path), str(DB_PATH))
         raise HTTPException(500, f"Error al restaurar: {str(e)}")
+
+
+# ═══════════════════════════════════════════════════════════
+#  QUEST ESCOLAR — ENDPOINTS BASE
+# ═══════════════════════════════════════════════════════════
+
+class QuestProgresoBody(BaseModel):
+    licencia_alumno: str
+    guia_id: int
+    dia: int
+    fase: str          # estudio|juego|boss
+    completado: int = 0
+    puntaje: int = 0
+    errores: int = 0
+    tiempo_segundos: int = 0
+
+class QuestErrorBody(BaseModel):
+    licencia_alumno: str
+    guia_id: int
+    pregunta_id: int
+    respuesta_dada: str
+
+@app.get("/api/quest/mis-guias/{licencia}")
+def quest_mis_guias(licencia: str):
+    """Retorna guías asignadas al alumno (propias + de su maestro/grupo)."""
+    conn = get_db()
+    try:
+        # Obtener info del alumno
+        alumno = conn.execute(
+            "SELECT Tipo, Nombre FROM Licencias WHERE Licencia=?", (licencia,)
+        ).fetchone()
+        if not alumno:
+            raise HTTPException(status_code=404, detail="Licencia no encontrada")
+
+        guias = []
+
+        # 1) Guías propias (subidas por el alumno o por su padre)
+        rows = conn.execute(
+            "SELECT * FROM quest_guias WHERE licencia_subio=? AND activa=1 ORDER BY fecha_creacion DESC",
+            (licencia,)
+        ).fetchall()
+        guias.extend([dict(r) for r in rows])
+
+        # 2) Guías de maestros que tienen al alumno en su grupo
+        maestros = conn.execute(
+            "SELECT Licencia FROM Licencias WHERE Tipo='maestro'"
+        ).fetchall()
+        for m in maestros:
+            rows2 = conn.execute(
+                """SELECT g.* FROM quest_guias g
+                   WHERE g.licencia_subio=? AND g.activa=1
+                   AND (g.codigo_grupo=? OR g.codigo_grupo='todos')
+                   ORDER BY g.fecha_creacion DESC""",
+                (m["Licencia"], licencia)
+            ).fetchall()
+            guias.extend([dict(r) for r in rows2])
+
+        # Eliminar duplicados por id
+        seen = set()
+        unique = []
+        for g in guias:
+            if g["id"] not in seen:
+                seen.add(g["id"])
+                prog = conn.execute(
+                    "SELECT dia, fase, completado, puntaje FROM quest_progreso WHERE licencia_alumno=? AND guia_id=?",
+                    (licencia, g["id"])
+                ).fetchall()
+                g["progreso"] = [dict(p) for p in prog]
+                unique.append(g)
+
+        return {"guias": unique}
+    finally:
+        conn.close()
+
+@app.get("/api/quest/guia/{guia_id}/dia/{dia}")
+def quest_preguntas_dia(guia_id: int, dia: int):
+    """Retorna las preguntas del día N de una guía."""
+    conn = get_db()
+    try:
+        guia = conn.execute("SELECT * FROM quest_guias WHERE id=?", (guia_id,)).fetchone()
+        if not guia:
+            raise HTTPException(status_code=404, detail="Guía no encontrada")
+        preguntas = conn.execute(
+            "SELECT * FROM quest_preguntas WHERE guia_id=? AND dia=? ORDER BY id",
+            (guia_id, dia)
+        ).fetchall()
+        return {
+            "guia": dict(guia),
+            "dia": dia,
+            "preguntas": [dict(p) for p in preguntas]
+        }
+    finally:
+        conn.close()
+
+@app.post("/api/quest/progreso")
+def quest_guardar_progreso(body: QuestProgresoBody):
+    """Guarda o actualiza el progreso del alumno."""
+    conn = get_db()
+    try:
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute("""
+            INSERT INTO quest_progreso (licencia_alumno, guia_id, dia, fase, completado, puntaje, errores, tiempo_segundos, fecha)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(licencia_alumno, guia_id, dia, fase)
+            DO UPDATE SET completado=excluded.completado, puntaje=excluded.puntaje,
+                          errores=excluded.errores, tiempo_segundos=excluded.tiempo_segundos, fecha=excluded.fecha
+        """, (body.licencia_alumno, body.guia_id, body.dia, body.fase,
+              body.completado, body.puntaje, body.errores, body.tiempo_segundos, fecha))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+@app.post("/api/quest/error")
+def quest_guardar_error(body: QuestErrorBody):
+    """Registra un error específico de un alumno en una pregunta."""
+    conn = get_db()
+    try:
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute(
+            "INSERT INTO quest_errores (licencia_alumno, guia_id, pregunta_id, respuesta_dada, fecha) VALUES (?,?,?,?,?)",
+            (body.licencia_alumno, body.guia_id, body.pregunta_id, body.respuesta_dada, fecha)
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+@app.get("/api/quest/reporte/{licencia_alumno}/{guia_id}")
+def quest_reporte(licencia_alumno: str, guia_id: int):
+    """Reporte completo de un alumno en una guía."""
+    conn = get_db()
+    try:
+        alumno = conn.execute(
+            "SELECT Nombre, Correo FROM Licencias WHERE Licencia=?", (licencia_alumno,)
+        ).fetchone()
+        guia = conn.execute("SELECT * FROM quest_guias WHERE id=?", (guia_id,)).fetchone()
+        if not alumno or not guia:
+            raise HTTPException(status_code=404, detail="No encontrado")
+
+        progreso = conn.execute(
+            "SELECT * FROM quest_progreso WHERE licencia_alumno=? AND guia_id=? ORDER BY dia, fase",
+            (licencia_alumno, guia_id)
+        ).fetchall()
+
+        errores_count = conn.execute("""
+            SELECT qe.pregunta_id, COUNT(*) as total_errores, qp.pregunta, qp.respuesta_correcta, qp.dia
+            FROM quest_errores qe
+            JOIN quest_preguntas qp ON qe.pregunta_id = qp.id
+            WHERE qe.licencia_alumno=? AND qe.guia_id=?
+            GROUP BY qe.pregunta_id
+            ORDER BY total_errores DESC
+            LIMIT 10
+        """, (licencia_alumno, guia_id)).fetchall()
+
+        dias_stats = {}
+        for p in progreso:
+            d = p["dia"]
+            if d not in dias_stats:
+                dias_stats[d] = {"puntaje": 0, "errores": 0, "tiempo": 0, "fases_completadas": 0}
+            dias_stats[d]["puntaje"] += p["puntaje"]
+            dias_stats[d]["errores"] += p["errores"]
+            dias_stats[d]["tiempo"] += p["tiempo_segundos"]
+            if p["completado"]:
+                dias_stats[d]["fases_completadas"] += 1
+
+        total_puntaje = sum(p["puntaje"] for p in progreso)
+        total_errores = sum(p["errores"] for p in progreso)
+        dias_completados = sum(1 for d, s in dias_stats.items() if s["fases_completadas"] >= 2)
+
+        return {
+            "alumno": {"nombre": alumno["Nombre"], "licencia": licencia_alumno},
+            "guia": dict(guia),
+            "resumen": {
+                "total_puntaje": total_puntaje,
+                "total_errores": total_errores,
+                "dias_completados": dias_completados,
+                "total_dias": guia["dias_estudio"]
+            },
+            "por_dia": dias_stats,
+            "top_errores": [dict(e) for e in errores_count],
+            "progreso_detalle": [dict(p) for p in progreso]
+        }
+    finally:
+        conn.close()
+
+@app.get("/api/quest/dashboard/{licencia_maestro}")
+def quest_dashboard_maestro(licencia_maestro: str):
+    """Dashboard del maestro: progreso de todos sus alumnos."""
+    conn = get_db()
+    try:
+        maestro = conn.execute(
+            "SELECT Nombre, Tipo FROM Licencias WHERE Licencia=? AND Tipo IN ('maestro','padre','admin')",
+            (licencia_maestro,)
+        ).fetchone()
+        if not maestro:
+            raise HTTPException(status_code=403, detail="No autorizado")
+
+        guias = conn.execute(
+            "SELECT * FROM quest_guias WHERE licencia_subio=? AND activa=1 ORDER BY fecha_creacion DESC",
+            (licencia_maestro,)
+        ).fetchall()
+
+        resultado = []
+        for guia in guias:
+            g = dict(guia)
+            alumnos_prog = conn.execute("""
+                SELECT l.Nombre, l.Licencia,
+                       SUM(qp.puntaje) as puntaje_total,
+                       SUM(qp.errores) as errores_total,
+                       COUNT(CASE WHEN qp.completado=1 THEN 1 END) as fases_completadas
+                FROM quest_progreso qp
+                JOIN Licencias l ON qp.licencia_alumno = l.Licencia
+                WHERE qp.guia_id=?
+                GROUP BY qp.licencia_alumno
+                ORDER BY puntaje_total DESC
+            """, (guia["id"],)).fetchall()
+            g["alumnos"] = [dict(a) for a in alumnos_prog]
+            resultado.append(g)
+
+        return {"maestro": maestro["Nombre"], "guias": resultado}
+    finally:
+        conn.close()
