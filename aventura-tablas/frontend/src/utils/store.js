@@ -58,6 +58,12 @@ export const useGameStore = create(
       esRepeticion: false,      // el mundo actual es un replay
       multiplicadorRepeticion: 1.0,  // 1.0 normal | 0.5 primer replay | 0.25 segundo
 
+      // ─── QUEST ESCOLAR ───────────────────────────────────
+      questGuias: [],
+      questGuiaActual: null,
+      questDiaActual: 1,
+      questFaseActual: 'estudio',
+
       // ─── ESTADO UI ───────────────────────────────────────
       pagina: "login",
       animacion: "idle",
@@ -450,6 +456,12 @@ export const useGameStore = create(
 
       setAnimacion: (anim) => set({ animacion: anim }),
       setPagina:    (p)    => set({ pagina: p }),
+
+      // ─── QUEST ESCOLAR ───────────────────────────────────
+      setQuestGuias:      (guias) => set({ questGuias: guias }),
+      setQuestGuiaActual: (guia)  => set({ questGuiaActual: guia }),
+      setQuestDiaActual:  (dia)   => set({ questDiaActual: dia }),
+      setQuestFaseActual: (fase)  => set({ questFaseActual: fase }),
     }),
     {
       name: "aventura-tablas-store-v2",
