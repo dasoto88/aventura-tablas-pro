@@ -15,6 +15,7 @@ import SupremoPage from "./pages/SupremoPage";
 import IntroPage from "./pages/IntroPage";
 import EstudioTablaPage from "./pages/EstudioTablaPage";
 import DashboardPage from "./pages/DashboardPage";
+import QuestReportePage from "./pages/QuestReportePage";
 
 import "./App.css";
 
@@ -53,6 +54,7 @@ function App() {
       case "intro":            return <IntroPage />;
       case "estudio_tabla":    return <EstudioTablaPage />;
       case "dashboard":        return <DashboardPage />;
+      case "quest_reporte":    return <QuestReportePage />;
       default:                 return <LoginPage />;
     }
   };

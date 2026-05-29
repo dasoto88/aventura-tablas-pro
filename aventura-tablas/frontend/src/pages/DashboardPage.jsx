@@ -295,6 +295,34 @@ export default function DashboardPage() {
           })}
         </div>
 
+        {/* Quest Escolar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            background: "linear-gradient(135deg, rgba(108,52,131,0.2), rgba(26,82,118,0.2))",
+            border: "2px solid rgba(108,52,131,0.4)",
+            borderRadius: "16px",
+            padding: "20px",
+            marginTop: "20px",
+            cursor: "pointer",
+          }}
+          onClick={() => store.setPagina("quest_menu")}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <span style={{ fontSize: "2.5rem" }}>⚔️</span>
+            <div>
+              <h3 style={{ color: "#FFD700", marginBottom: "4px", fontFamily: "'Orbitron', sans-serif", fontSize: "1rem" }}>
+                Quest Escolar: El Gran Torneo
+              </h3>
+              <p style={{ color: "#aaa", fontSize: "0.9rem", margin: 0 }}>
+                Sube guías de estudio · Ve el progreso de tus alumnos · Descarga reportes
+              </p>
+            </div>
+            <span style={{ marginLeft: "auto", color: "#8E44AD", fontSize: "1.5rem" }}>→</span>
+          </div>
+        </motion.div>
+
         {/* Botón refrescar */}
         <div style={{ textAlign: "center", marginTop: 20 }}>
           <button onClick={cargar} className="btn btn-neon btn-sm">🔄 Actualizar datos</button>
