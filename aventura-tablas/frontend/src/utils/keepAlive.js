@@ -10,7 +10,8 @@
 
 const API = process.env.REACT_APP_API_URL || "";
 const INTERVALO_MS = 5 * 60 * 1000;  // 5 minutos
-const PING_URL     = `${API}/api/ping`;
+// REACT_APP_API_URL ya incluye /api, solo agregar /ping
+const PING_URL     = `${API}/ping`;
 
 let _timer    = null;
 let _iniciado = false;
