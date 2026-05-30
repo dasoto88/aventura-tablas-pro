@@ -132,7 +132,7 @@ export const useGameStore = create(
       },
 
       seleccionarAvatar: (avatarId) => {
-        set({ avatarId, avatarSeleccionado: true, pagina: "mapa" });
+        set({ avatarId, avatarSeleccionado: true, pagina: "selector_juego" });
       },
 
       irAMundo: (mundoId) => {
