@@ -85,54 +85,6 @@ def init_db():
                 Escuela TEXT NOT NULL,
                 Estado  TEXT DEFAULT 'Pendiente'
             );
-            CREATE TABLE IF NOT EXISTS quest_guias (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                licencia_subio TEXT NOT NULL,
-                tipo_subidor TEXT NOT NULL,
-                codigo_grupo TEXT DEFAULT '',
-                titulo TEXT NOT NULL,
-                materia TEXT DEFAULT '',
-                fecha_examen TEXT DEFAULT '',
-                texto_extraido TEXT NOT NULL,
-                dias_estudio INTEGER DEFAULT 5,
-                fecha_creacion TEXT NOT NULL,
-                activa INTEGER DEFAULT 1
-            );
-            CREATE TABLE IF NOT EXISTS quest_preguntas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                guia_id INTEGER NOT NULL,
-                dia INTEGER NOT NULL,
-                tipo TEXT NOT NULL,
-                pregunta TEXT NOT NULL,
-                opcion_a TEXT DEFAULT '',
-                opcion_b TEXT DEFAULT '',
-                opcion_c TEXT DEFAULT '',
-                opcion_d TEXT DEFAULT '',
-                respuesta_correcta TEXT NOT NULL,
-                explicacion TEXT DEFAULT '',
-                dificultad INTEGER DEFAULT 1
-            );
-            CREATE TABLE IF NOT EXISTS quest_progreso (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                licencia_alumno TEXT NOT NULL,
-                guia_id INTEGER NOT NULL,
-                dia INTEGER NOT NULL,
-                fase TEXT NOT NULL,
-                completado INTEGER DEFAULT 0,
-                puntaje INTEGER DEFAULT 0,
-                errores INTEGER DEFAULT 0,
-                tiempo_segundos INTEGER DEFAULT 0,
-                fecha TEXT NOT NULL,
-                UNIQUE(licencia_alumno, guia_id, dia, fase)
-            );
-            CREATE TABLE IF NOT EXISTS quest_errores (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                licencia_alumno TEXT NOT NULL,
-                guia_id INTEGER NOT NULL,
-                pregunta_id INTEGER NOT NULL,
-                respuesta_dada TEXT NOT NULL,
-                fecha TEXT NOT NULL
-            );
         """)
         # Crear admin por defecto si no existe
         admin_cfg = conn.execute("SELECT value FROM config WHERE key='admin_licencia'").fetchone()
@@ -742,7 +694,14 @@ async def backup_email(bg: BackgroundTasks):
     }
 
 # ── Admin — exportar/descargar base de datos ──────────────────
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi import Form
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from io import BytesIO
 
 @app.get("/api/admin/exportar-db")
 def exportar_db():
@@ -794,135 +753,124 @@ async def importar_db(archivo: UploadFile = File(...)):
         raise HTTPException(500, f"Error al restaurar: {str(e)}")
 
 
-# ═══════════════════════════════════════════════════════════
-#  QUEST ESCOLAR — ENDPOINTS BASE
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+#  QUEST ESCOLAR â€” SUBIR GUÃA + REPORTE PDF
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-class QuestProgresoBody(BaseModel):
-    licencia_alumno: str
-    guia_id: int
-    dia: int
-    fase: str          # estudio|juego|boss
-    completado: int = 0
-    puntaje: int = 0
-    errores: int = 0
-    tiempo_segundos: int = 0
-
-class QuestErrorBody(BaseModel):
-    licencia_alumno: str
-    guia_id: int
-    pregunta_id: int
-    respuesta_dada: str
-
-@app.get("/api/quest/mis-guias/{licencia}")
-def quest_mis_guias(licencia: str):
-    """Retorna guías asignadas al alumno (propias + de su maestro/grupo)."""
+@app.post("/api/quest/subir-guia")
+async def quest_subir_guia(
+    licencia: str = Form(...),
+    titulo: str = Form(...),
+    materia: str = Form(""),
+    fecha_examen: str = Form(""),
+    dias_estudio: int = Form(5),
+    codigo_grupo: str = Form(""),
+    archivo: UploadFile = File(...)
+):
+    """
+    Recibe PDF o imagen de guia de estudio.
+    Extrae texto con Gemini y genera preguntas automaticamente.
+    """
+    # Verificar licencia
     conn = get_db()
     try:
-        # Obtener info del alumno
-        alumno = conn.execute(
-            "SELECT Tipo, Nombre FROM Licencias WHERE Licencia=?", (licencia,)
-        ).fetchone()
-        if not alumno:
-            raise HTTPException(status_code=404, detail="Licencia no encontrada")
-
-        guias = []
-
-        # 1) Guías propias (subidas por el alumno o por su padre)
-        rows = conn.execute(
-            "SELECT * FROM quest_guias WHERE licencia_subio=? AND activa=1 ORDER BY fecha_creacion DESC",
+        usuario = conn.execute(
+            "SELECT Tipo, Nombre FROM Licencias WHERE Licencia=? AND Activa='SI'",
             (licencia,)
-        ).fetchall()
-        guias.extend([dict(r) for r in rows])
-
-        # 2) Guías de maestros que tienen al alumno en su grupo
-        maestros = conn.execute(
-            "SELECT Licencia FROM Licencias WHERE Tipo='maestro'"
-        ).fetchall()
-        for m in maestros:
-            rows2 = conn.execute(
-                """SELECT g.* FROM quest_guias g
-                   WHERE g.licencia_subio=? AND g.activa=1
-                   AND (g.codigo_grupo=? OR g.codigo_grupo='todos')
-                   ORDER BY g.fecha_creacion DESC""",
-                (m["Licencia"], licencia)
-            ).fetchall()
-            guias.extend([dict(r) for r in rows2])
-
-        # Eliminar duplicados por id
-        seen = set()
-        unique = []
-        for g in guias:
-            if g["id"] not in seen:
-                seen.add(g["id"])
-                prog = conn.execute(
-                    "SELECT dia, fase, completado, puntaje FROM quest_progreso WHERE licencia_alumno=? AND guia_id=?",
-                    (licencia, g["id"])
-                ).fetchall()
-                g["progreso"] = [dict(p) for p in prog]
-                unique.append(g)
-
-        return {"guias": unique}
+        ).fetchone()
+        if not usuario:
+            raise HTTPException(status_code=403, detail="Licencia no valida o inactiva")
     finally:
         conn.close()
 
-@app.get("/api/quest/guia/{guia_id}/dia/{dia}")
-def quest_preguntas_dia(guia_id: int, dia: int):
-    """Retorna las preguntas del día N de una guía."""
+    # Leer el archivo
+    contenido = await archivo.read()
+    content_type = archivo.content_type or ""
+
+    # Importacion lazy para no fallar si GEMINI_API_KEY no esta
+    try:
+        from quest_ai import extraer_texto_pdf, extraer_texto_imagen, generar_plan_estudio
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Modulo quest_ai no encontrado")
+
+    # Extraer texto segun tipo de archivo
+    try:
+        if "pdf" in content_type.lower() or archivo.filename.lower().endswith(".pdf"):
+            texto = extraer_texto_pdf(contenido)
+        elif any(ext in content_type.lower() for ext in ["jpeg", "jpg", "png", "webp", "image"]):
+            mime = content_type if content_type else "image/jpeg"
+            texto = extraer_texto_imagen(contenido, mime_type=mime)
+        else:
+            raise HTTPException(status_code=400, detail="Formato no soportado. Usa PDF, JPG o PNG")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Error de configuracion IA: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al procesar archivo: {str(e)}")
+
+    if not texto or len(texto.strip()) < 50:
+        raise HTTPException(status_code=400, detail="No se pudo extraer texto suficiente del archivo")
+
+    # Generar plan de estudio con preguntas
+    try:
+        plan = generar_plan_estudio(texto, dias=dias_estudio, materia=materia)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar preguntas: {str(e)}")
+
+    # Guardar en BD
     conn = get_db()
     try:
-        guia = conn.execute("SELECT * FROM quest_guias WHERE id=?", (guia_id,)).fetchone()
-        if not guia:
-            raise HTTPException(status_code=404, detail="Guía no encontrada")
-        preguntas = conn.execute(
-            "SELECT * FROM quest_preguntas WHERE guia_id=? AND dia=? ORDER BY id",
-            (guia_id, dia)
-        ).fetchall()
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Insertar guia
+        cur = conn.execute("""
+            INSERT INTO quest_guias
+            (licencia_subio, tipo_subidor, codigo_grupo, titulo, materia, fecha_examen,
+             texto_extraido, dias_estudio, fecha_creacion, activa)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        """, (licencia, usuario["Tipo"], codigo_grupo,
+              plan.get("titulo", titulo), plan.get("materia", materia),
+              fecha_examen, texto, dias_estudio, fecha))
+        guia_id = cur.lastrowid
+
+        # Insertar preguntas por dia
+        total_preguntas = 0
+        for dia_data in plan.get("dias", []):
+            dia_num = dia_data.get("dia", 1)
+            for p in dia_data.get("preguntas", []):
+                conn.execute("""
+                    INSERT INTO quest_preguntas
+                    (guia_id, dia, tipo, pregunta, opcion_a, opcion_b, opcion_c, opcion_d,
+                     respuesta_correcta, explicacion, dificultad)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    guia_id, dia_num,
+                    p.get("tipo", "opcion_multiple"),
+                    p.get("pregunta", ""),
+                    p.get("opcion_a", ""), p.get("opcion_b", ""),
+                    p.get("opcion_c", ""), p.get("opcion_d", ""),
+                    p.get("respuesta_correcta", "a"),
+                    p.get("explicacion", ""),
+                    p.get("dificultad", 1)
+                ))
+                total_preguntas += 1
+
+        conn.commit()
         return {
-            "guia": dict(guia),
-            "dia": dia,
-            "preguntas": [dict(p) for p in preguntas]
+            "ok": True,
+            "guia_id": guia_id,
+            "titulo": plan.get("titulo", titulo),
+            "materia": plan.get("materia", materia),
+            "resumen": plan.get("resumen_general", ""),
+            "dias_generados": len(plan.get("dias", [])),
+            "total_preguntas": total_preguntas
         }
     finally:
         conn.close()
 
-@app.post("/api/quest/progreso")
-def quest_guardar_progreso(body: QuestProgresoBody):
-    """Guarda o actualiza el progreso del alumno."""
-    conn = get_db()
-    try:
-        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        conn.execute("""
-            INSERT INTO quest_progreso (licencia_alumno, guia_id, dia, fase, completado, puntaje, errores, tiempo_segundos, fecha)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(licencia_alumno, guia_id, dia, fase)
-            DO UPDATE SET completado=excluded.completado, puntaje=excluded.puntaje,
-                          errores=excluded.errores, tiempo_segundos=excluded.tiempo_segundos, fecha=excluded.fecha
-        """, (body.licencia_alumno, body.guia_id, body.dia, body.fase,
-              body.completado, body.puntaje, body.errores, body.tiempo_segundos, fecha))
-        conn.commit()
-        return {"ok": True}
-    finally:
-        conn.close()
 
-@app.post("/api/quest/error")
-def quest_guardar_error(body: QuestErrorBody):
-    """Registra un error específico de un alumno en una pregunta."""
-    conn = get_db()
-    try:
-        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        conn.execute(
-            "INSERT INTO quest_errores (licencia_alumno, guia_id, pregunta_id, respuesta_dada, fecha) VALUES (?,?,?,?,?)",
-            (body.licencia_alumno, body.guia_id, body.pregunta_id, body.respuesta_dada, fecha)
-        )
-        conn.commit()
-        return {"ok": True}
-    finally:
-        conn.close()
-
-@app.get("/api/quest/reporte/{licencia_alumno}/{guia_id}")
-def quest_reporte(licencia_alumno: str, guia_id: int):
-    """Reporte completo de un alumno en una guía."""
+@app.get("/api/quest/reporte/exportar/{licencia_alumno}/{guia_id}")
+def quest_exportar_reporte_pdf(licencia_alumno: str, guia_id: int):
+    """Genera y descarga un reporte PDF del progreso del alumno."""
     conn = get_db()
     try:
         alumno = conn.execute(
@@ -937,81 +885,185 @@ def quest_reporte(licencia_alumno: str, guia_id: int):
             (licencia_alumno, guia_id)
         ).fetchall()
 
-        errores_count = conn.execute("""
-            SELECT qe.pregunta_id, COUNT(*) as total_errores, qp.pregunta, qp.respuesta_correcta, qp.dia
+        top_errores = conn.execute("""
+            SELECT qe.pregunta_id, COUNT(*) as total, qp.pregunta, qp.dia
             FROM quest_errores qe
             JOIN quest_preguntas qp ON qe.pregunta_id = qp.id
             WHERE qe.licencia_alumno=? AND qe.guia_id=?
-            GROUP BY qe.pregunta_id
-            ORDER BY total_errores DESC
-            LIMIT 10
+            GROUP BY qe.pregunta_id ORDER BY total DESC LIMIT 5
         """, (licencia_alumno, guia_id)).fetchall()
 
-        dias_stats = {}
-        for p in progreso:
-            d = p["dia"]
-            if d not in dias_stats:
-                dias_stats[d] = {"puntaje": 0, "errores": 0, "tiempo": 0, "fases_completadas": 0}
-            dias_stats[d]["puntaje"] += p["puntaje"]
-            dias_stats[d]["errores"] += p["errores"]
-            dias_stats[d]["tiempo"] += p["tiempo_segundos"]
-            if p["completado"]:
-                dias_stats[d]["fases_completadas"] += 1
-
-        total_puntaje = sum(p["puntaje"] for p in progreso)
-        total_errores = sum(p["errores"] for p in progreso)
-        dias_completados = sum(1 for d, s in dias_stats.items() if s["fases_completadas"] >= 2)
-
-        return {
-            "alumno": {"nombre": alumno["Nombre"], "licencia": licencia_alumno},
-            "guia": dict(guia),
-            "resumen": {
-                "total_puntaje": total_puntaje,
-                "total_errores": total_errores,
-                "dias_completados": dias_completados,
-                "total_dias": guia["dias_estudio"]
-            },
-            "por_dia": dias_stats,
-            "top_errores": [dict(e) for e in errores_count],
-            "progreso_detalle": [dict(p) for p in progreso]
-        }
     finally:
         conn.close()
 
-@app.get("/api/quest/dashboard/{licencia_maestro}")
-def quest_dashboard_maestro(licencia_maestro: str):
-    """Dashboard del maestro: progreso de todos sus alumnos."""
+    # Generar PDF con ReportLab
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter,
+                            rightMargin=40, leftMargin=40,
+                            topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    story = []
+
+    titulo_style = ParagraphStyle('Titulo', parent=styles['Title'],
+                                   fontSize=20, textColor=colors.HexColor('#6C3483'),
+                                   spaceAfter=6)
+    story.append(Paragraph("Quest Escolar: El Gran Torneo", titulo_style))
+    story.append(Paragraph("Reporte de Progreso", styles['Title']))
+    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#6C3483')))
+    story.append(Spacer(1, 12))
+
+    info_style = ParagraphStyle('Info', parent=styles['Normal'], fontSize=12, spaceAfter=4)
+    story.append(Paragraph(f"<b>Alumno:</b> {alumno['Nombre']}", info_style))
+    story.append(Paragraph(f"<b>Guia:</b> {guia['titulo']}", info_style))
+    story.append(Paragraph(f"<b>Materia:</b> {guia['materia']}", info_style))
+    story.append(Paragraph(f"<b>Fecha de examen:</b> {guia['fecha_examen'] or 'No especificada'}", info_style))
+    story.append(Spacer(1, 12))
+
+    total_puntaje = sum(p["puntaje"] for p in progreso)
+    total_errores = sum(p["errores"] for p in progreso)
+    dias_completados = len(set(p["dia"] for p in progreso if p["completado"]))
+    puntaje_max = guia["dias_estudio"] * 3 * 100  # 3 fases x 100 pts por dia
+
+    story.append(Paragraph("<b>Resumen General</b>", styles['Heading2']))
+    resumen_data = [
+        ["Metrica", "Valor"],
+        ["Puntaje Total", f"{total_puntaje} / {puntaje_max}"],
+        ["Dias Completados", f"{dias_completados} de {guia['dias_estudio']}"],
+        ["Total de Errores", str(total_errores)],
+        ["Porcentaje de Avance", f"{int(dias_completados/guia['dias_estudio']*100)}%"],
+    ]
+    t = Table(resumen_data, colWidths=[3*inch, 3*inch])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#6C3483')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5EEF8')]),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 16))
+
+    if progreso:
+        story.append(Paragraph("<b>Progreso por Dia</b>", styles['Heading2']))
+        dias_data = [["Dia", "Fase", "Puntaje", "Errores", "Estado"]]
+        for p in progreso:
+            estado = "Completado" if p["completado"] else "En progreso"
+            dias_data.append([
+                f"Dia {p['dia']}", p["fase"].capitalize(),
+                str(p["puntaje"]), str(p["errores"]), estado
+            ])
+        t2 = Table(dias_data, colWidths=[0.8*inch, 1.5*inch, 1.2*inch, 1.2*inch, 2*inch])
+        t2.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1A5276')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#EBF5FB')]),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ]))
+        story.append(t2)
+        story.append(Spacer(1, 16))
+
+    if top_errores:
+        story.append(Paragraph("<b>Preguntas con Mas Dificultad</b>", styles['Heading2']))
+        story.append(Paragraph("Estas preguntas necesitan mas practica:",
+                               ParagraphStyle('sub', parent=styles['Normal'],
+                                            fontSize=10, textColor=colors.grey)))
+        story.append(Spacer(1, 6))
+        for i, err in enumerate(top_errores, 1):
+            story.append(Paragraph(
+                f"<b>{i}. Dia {err['dia']}:</b> {err['pregunta']} "
+                f"<font color='red'>({err['total']} errores)</font>",
+                ParagraphStyle('err', parent=styles['Normal'], fontSize=10, spaceAfter=4)
+            ))
+
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("<b>Recomendaciones</b>", styles['Heading2']))
+    rec_style = ParagraphStyle('rec', parent=styles['Normal'], fontSize=10, spaceAfter=3)
+
+    porcentaje = int(dias_completados/guia['dias_estudio']*100) if guia['dias_estudio'] > 0 else 0
+    if porcentaje >= 80:
+        story.append(Paragraph("Excelente trabajo. El alumno ha completado la mayor parte del material.", rec_style))
+    elif porcentaje >= 50:
+        story.append(Paragraph("Buen avance. Se recomienda continuar con los dias pendientes.", rec_style))
+    else:
+        story.append(Paragraph("Se recomienda dedicar mas tiempo al estudio diario.", rec_style))
+
+    if total_errores > 10:
+        story.append(Paragraph("Repasar los temas con mas errores antes del examen.", rec_style))
+
+    if top_errores:
+        materias_dia = set(err["dia"] for err in top_errores)
+        for d in materias_dia:
+            story.append(Paragraph(f"Reforzar contenido del Dia {d}.", rec_style))
+
+    story.append(Spacer(1, 20))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.grey))
+    story.append(Paragraph(
+        f"Generado por Aventura de Tablas Pro - Quest Escolar | {datetime.now().strftime('%d/%m/%Y')}",
+        ParagraphStyle('footer', parent=styles['Normal'], fontSize=8,
+                      textColor=colors.grey, alignment=1)
+    ))
+
+    doc.build(story)
+    buffer.seek(0)
+
+    nombre_archivo = f"reporte_quest_{alumno['Nombre'].replace(' ', '_')}_{guia_id}.pdf"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"}
+    )
+
+
+@app.get("/api/quest/validar-ia")
+def quest_validar_ia():
+    """Verifica que Gemini este configurado y funcione."""
+    try:
+        from quest_ai import validar_configuracion
+        return validar_configuracion()
+    except ImportError:
+        return {"ok": False, "error": "Modulo quest_ai no encontrado"}
+
+
+@app.get("/api/quest/resumen-dia/{guia_id}/{dia}")
+def quest_resumen_dia(guia_id: int, dia: int):
+    """Retorna resumen del contenido del dia para la fase de estudio."""
     conn = get_db()
     try:
-        maestro = conn.execute(
-            "SELECT Nombre, Tipo FROM Licencias WHERE Licencia=? AND Tipo IN ('maestro','padre','admin')",
-            (licencia_maestro,)
+        guia = conn.execute("SELECT texto_extraido, titulo, materia FROM quest_guias WHERE id=?",
+                            (guia_id,)).fetchone()
+        if not guia:
+            raise HTTPException(status_code=404, detail="Guia no encontrada")
+
+        preguntas_dia = conn.execute(
+            "SELECT COUNT(*) as total FROM quest_preguntas WHERE guia_id=? AND dia=?",
+            (guia_id, dia)
         ).fetchone()
-        if not maestro:
-            raise HTTPException(status_code=403, detail="No autorizado")
 
-        guias = conn.execute(
-            "SELECT * FROM quest_guias WHERE licencia_subio=? AND activa=1 ORDER BY fecha_creacion DESC",
-            (licencia_maestro,)
-        ).fetchall()
+        # Generar resumen con Gemini (opcional, puede fallar si no hay API key)
+        resumen_ia = None
+        try:
+            from quest_ai import generar_resumen_dia
+            texto_total = guia["texto_extraido"]
+            partes = len(texto_total) // 5
+            inicio = (dia - 1) * partes
+            fin = dia * partes
+            texto_dia = texto_total[inicio:fin] if texto_total else ""
+            if texto_dia:
+                resumen_ia = generar_resumen_dia(texto_dia)
+        except Exception:
+            pass  # Si falla Gemini, seguimos sin resumen IA
 
-        resultado = []
-        for guia in guias:
-            g = dict(guia)
-            alumnos_prog = conn.execute("""
-                SELECT l.Nombre, l.Licencia,
-                       SUM(qp.puntaje) as puntaje_total,
-                       SUM(qp.errores) as errores_total,
-                       COUNT(CASE WHEN qp.completado=1 THEN 1 END) as fases_completadas
-                FROM quest_progreso qp
-                JOIN Licencias l ON qp.licencia_alumno = l.Licencia
-                WHERE qp.guia_id=?
-                GROUP BY qp.licencia_alumno
-                ORDER BY puntaje_total DESC
-            """, (guia["id"],)).fetchall()
-            g["alumnos"] = [dict(a) for a in alumnos_prog]
-            resultado.append(g)
-
-        return {"maestro": maestro["Nombre"], "guias": resultado}
+        return {
+            "guia_id": guia_id,
+            "dia": dia,
+            "titulo": guia["titulo"],
+            "materia": guia["materia"],
+            "total_preguntas": preguntas_dia["total"] if preguntas_dia else 0,
+            "resumen_ia": resumen_ia
+        }
     finally:
         conn.close()
