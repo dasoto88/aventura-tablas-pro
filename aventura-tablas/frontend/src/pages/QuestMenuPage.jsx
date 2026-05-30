@@ -4,7 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useGameStore } from "../utils/store";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 export default function QuestMenuPage() {
   const { licencia, nombre, tipoUsuario, setPagina,
@@ -23,7 +23,7 @@ export default function QuestMenuPage() {
 
   const cargarGuias = async () => {
     try {
-      const res = await axios.get(`${API}/quest/mis-guias/${licencia}`);
+      const res = await axios.get(`${API}/api/quest/mis-guias/${licencia}`);
       setGuias(res.data.guias || []);
       setQuestGuias(res.data.guias || []);
     } catch (e) {

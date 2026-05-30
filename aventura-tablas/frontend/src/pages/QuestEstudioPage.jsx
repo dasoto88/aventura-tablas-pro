@@ -4,7 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useGameStore } from "../utils/store";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 // Personaje narrador (avatar del día)
 const NARRADORES = [
@@ -45,7 +45,7 @@ export default function QuestEstudioPage() {
 
   const cargarDia = async () => {
     try {
-      const res = await axios.get(`${API}/quest/guia/${guiaId}/dia/${questDiaActual}`);
+      const res = await axios.get(`${API}/api/quest/guia/${guiaId}/dia/${questDiaActual}`);
       setDatosDia(res.data);
       // Tomar 3 preguntas fáciles para calentamiento
       const preg = (res.data.preguntas || []).slice(0, 3);
@@ -59,7 +59,7 @@ export default function QuestEstudioPage() {
 
   const guardarProgresoEstudio = async () => {
     try {
-      await axios.post(`${API}/quest/progreso`, {
+      await axios.post(`${API}/api/quest/progreso`, {
         licencia_alumno: licencia,
         guia_id: guiaId,
         dia: questDiaActual,
@@ -84,7 +84,7 @@ export default function QuestEstudioPage() {
       toast.error(`Incorrecto. Era: ${p.respuesta_correcta}`, { duration: 1800 });
       // Guardar error
       try {
-        await axios.post(`${API}/quest/error`, {
+        await axios.post(`${API}/api/quest/error`, {
           licencia_alumno: licencia,
           guia_id: guiaId,
           pregunta_id: p.id,

@@ -4,7 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useGameStore } from "../utils/store";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 // Mini gráfica de barras con CSS puro
 function BarChart({ datos, colorActivo = "#FFD700" }) {
@@ -58,7 +58,7 @@ export default function QuestReportePage() {
 
   const cargarReporte = async () => {
     try {
-      const res = await axios.get(`${API}/quest/reporte/${licenciaObjetivo}/${guiaId}`);
+      const res = await axios.get(`${API}/api/quest/reporte/${licenciaObjetivo}/${guiaId}`);
       setReporte(res.data);
     } catch (e) {
       toast.error("Error al cargar reporte");
@@ -72,7 +72,7 @@ export default function QuestReportePage() {
     setDescargando(true);
     try {
       const res = await axios.get(
-        `${API}/quest/reporte/exportar/${licenciaObjetivo}/${guiaId}`,
+        `${API}/api/quest/reporte/exportar/${licenciaObjetivo}/${guiaId}`,
         { responseType: "blob" }
       );
       const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));

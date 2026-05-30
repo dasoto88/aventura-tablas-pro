@@ -4,7 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useGameStore } from "../utils/store";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 export default function QuestSubirGuiaPage() {
   const { licencia, tipoUsuario, setPagina } = useGameStore(s => ({
@@ -47,7 +47,7 @@ export default function QuestSubirGuiaPage() {
     fd.append("archivo", archivo);
 
     try {
-      const res = await axios.post(`${API}/quest/subir-guia`, fd, {
+      const res = await axios.post(`${API}/api/quest/subir-guia`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
         timeout: 120000, // 2 min para IA
       });

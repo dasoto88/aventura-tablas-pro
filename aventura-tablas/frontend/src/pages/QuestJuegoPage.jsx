@@ -4,7 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useGameStore } from "../utils/store";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
 const VIDAS_INIT = 3;
 const PREGUNTAS_PARA_BOSS = 10;
 const TIEMPO_POR_PREGUNTA = 30;
@@ -55,7 +55,7 @@ export default function QuestJuegoPage() {
 
   const cargarPreguntas = async () => {
     try {
-      const res = await axios.get(`${API}/quest/guia/${guiaId}/dia/${questDiaActual}`);
+      const res = await axios.get(`${API}/api/quest/guia/${guiaId}/dia/${questDiaActual}`);
       // Barajar preguntas
       const todas = [...(res.data.preguntas || [])];
       todas.sort(() => Math.random() - 0.5);
@@ -120,7 +120,7 @@ export default function QuestJuegoPage() {
       // Guardar error en BD
       if (p.id) {
         try {
-          await axios.post(`${API}/quest/error`, {
+          await axios.post(`${API}/api/quest/error`, {
             licencia_alumno: licencia,
             guia_id: guiaId,
             pregunta_id: p.id,
@@ -169,7 +169,7 @@ export default function QuestJuegoPage() {
 
   const guardarProgreso = async (puntaje, errTotales, completado) => {
     try {
-      await axios.post(`${API}/quest/progreso`, {
+      await axios.post(`${API}/api/quest/progreso`, {
         licencia_alumno: licencia,
         guia_id: guiaId,
         dia: questDiaActual,
