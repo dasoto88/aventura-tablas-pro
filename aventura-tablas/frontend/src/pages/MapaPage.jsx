@@ -64,6 +64,11 @@ export default function MapaPage() {
             🛒 Tienda
           </button>
           <button
+            onClick={() => useGameStore.setState({ pagina: "selector_juego" })}
+            style={{ background: "rgba(255,215,0,0.12)", border: "1px solid rgba(255,215,0,0.35)", color: "#FFD700", borderRadius: 8, padding: "5px 10px", cursor: "pointer", fontFamily: "Nunito, sans-serif", fontSize: 12, fontWeight: 700 }}>
+            ⚔️ Quest
+          </button>
+          <button
             onClick={() => cerrarSesion()}
             style={{ background: "rgba(255,0,110,0.12)", border: "1px solid rgba(255,0,110,0.35)", color: "#ff006e", borderRadius: 8, padding: "5px 10px", cursor: "pointer", fontFamily: "Nunito, sans-serif", fontSize: 12, fontWeight: 700 }}>
             🚪 Salir

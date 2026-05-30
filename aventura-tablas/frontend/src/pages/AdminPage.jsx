@@ -410,7 +410,7 @@ ${contenido}
           👑 ADMIN — {store.nombre}
         </div>
         <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
-          <button onClick={() => useGameStore.setState({ pagina:"seleccion_avatar" })} className="btn btn-neon btn-sm">🎮 Jugar</button>
+          <button onClick={() => useGameStore.setState({ pagina:"selector_juego" })} className="btn btn-neon btn-sm">🎮 Jugar</button>
           <button onClick={() => store.cerrarSesion()} className="btn btn-danger btn-sm">🚪 Salir</button>
         </div>
       </div>
