@@ -63,6 +63,32 @@ export default function MapaPage() {
             style={{ background: "rgba(255,214,0,0.12)", border: "1px solid rgba(255,214,0,0.35)", color: "#FFD700", borderRadius: 8, padding: "5px 10px", cursor: "pointer", fontFamily: "Nunito, sans-serif", fontSize: 12, fontWeight: 700 }}>
             🛒 Tienda
           </button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => useGameStore.setState({ pagina: "quest_menu" })}
+            style={{
+              background: "linear-gradient(135deg, #4A235A, #1B2631)",
+              border: "2px solid #8E44AD",
+              color: "#fff",
+              borderRadius: "8px",
+              padding: "5px 10px",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: "bold",
+              fontFamily: "Nunito, sans-serif",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              boxShadow: "0 0 10px rgba(142,68,173,0.4)",
+            }}
+          >
+            <span>⚔️</span>
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: "bold", lineHeight: 1.2 }}>Quest Escolar</div>
+              <div style={{ fontSize: "9px", color: "#C39BD3", lineHeight: 1.2 }}>El Gran Torneo</div>
+            </div>
+          </motion.button>
           <button
             onClick={() => useGameStore.setState({ pagina: "selector_juego" })}
             style={{ background: "rgba(255,215,0,0.12)", border: "1px solid rgba(255,215,0,0.35)", color: "#FFD700", borderRadius: 8, padding: "5px 10px", cursor: "pointer", fontFamily: "Nunito, sans-serif", fontSize: 12, fontWeight: 700 }}>

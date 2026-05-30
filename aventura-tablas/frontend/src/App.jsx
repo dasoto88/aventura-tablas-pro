@@ -15,14 +15,8 @@ import SupremoPage from "./pages/SupremoPage";
 import IntroPage from "./pages/IntroPage";
 import EstudioTablaPage from "./pages/EstudioTablaPage";
 import DashboardPage from "./pages/DashboardPage";
-import SelectorJuegoPage from "./pages/SelectorJuegoPage";
-import QuestIntroPage from "./pages/QuestIntroPage";
 import QuestMenuPage from "./pages/QuestMenuPage";
 import QuestSubirGuiaPage from "./pages/QuestSubirGuiaPage";
-import QuestEstudioPage from "./pages/QuestEstudioPage";
-import QuestJuegoPage from "./pages/QuestJuegoPage";
-import QuestBossPage from "./pages/QuestBossPage";
-import QuestReportePage from "./pages/QuestReportePage";
 
 import "./App.css";
 
@@ -51,7 +45,6 @@ function App() {
     switch (pagina) {
       case "login":            return <LoginPage />;
       case "seleccion_avatar": return <AvatarPage />;
-      case "selector_juego":   return <SelectorJuegoPage />;
       case "mapa":             return <MapaPage />;
       case "juego":            return <JuegoPage />;
       case "boss":             return <BossPage />;
@@ -62,14 +55,8 @@ function App() {
       case "intro":            return <IntroPage />;
       case "estudio_tabla":    return <EstudioTablaPage />;
       case "dashboard":        return <DashboardPage />;
-      // Quest Escolar
-      case "quest_intro":      return <QuestIntroPage />;
       case "quest_menu":       return <QuestMenuPage />;
       case "quest_subir":      return <QuestSubirGuiaPage />;
-      case "quest_estudio":    return <QuestEstudioPage />;
-      case "quest_juego":      return <QuestJuegoPage />;
-      case "quest_boss":       return <QuestBossPage />;
-      case "quest_reporte":    return <QuestReportePage />;
       default:                 return <LoginPage />;
     }
   };

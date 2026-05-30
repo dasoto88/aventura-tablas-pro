@@ -1,0 +1,25 @@
+# CLAUDE.md - Modo Ahorro Tokens para Vender
+
+## Reglas de Tokens
+1. Respuestas máximo 4 líneas. Sin "hola", sin resúmenes.
+2. No narres planes. Ejecuta directo con diffs.
+3. Si el cambio es >2 archivos, usa `/plan` primero.
+4. No reescribas archivos completos. Solo parches.
+5. No leas un archivo 2 veces en el mismo chat.
+
+## Reglas de Código Web + Python para Vender
+6. Stack: Python 3.11 + Flask, HTML5 + Tailwind, SQLite. Sin frameworks pesados.
+7. Código listo para vender: incluye `requirements.txt`, `README.md` con precio, `.gitignore`.
+8. Valida todo input: evita SQL injection/XSS.
+9. Estructura: `/src`, `/static`, `/templates`, `/docs`. Cliente entiende rápido.
+10. Antes de "listo" corre: `python -m py_compile main.py`.
+11. Pregunta antes de instalar: "¿uso requests o urllib para no inflar deps?"
+
+## Reglas de Skills
+12. NO actives skills automático. Solo si escribo `/skill nombre`.
+13. Si pido 2+ skills, ejecútalos en paralelo en 1 turno.
+14. Skills prohibidos: research, web-search, data-analysis. Gastan tokens.
+
+## Reglas para Entregar al Cliente
+15. Al terminar código, pregunta: "¿genero landing de venta y manual PDF?"
+16. Nombres de funciones en inglés, comentarios en español para cliente LATAM.

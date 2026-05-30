@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AventuraTablas Pro — Aprende Jugando</title>
+  <meta name="description" content="El juego de aventura donde los niños aprenden las tablas de multiplicar jugando. Membresía $99/mes."/>
+  <meta name="keywords" content="tablas de multiplicar, juego educativo, niños, aprender jugando, matemáticas"/>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --primary:#6C63FF;
+      --secondary:#FF6584;
+      --accent:#FFD700;
+      --dark:#1a1a2e;
+      --card:#16213e;
+    }
+    body{font-family:'Segoe UI',sans-serif;background:var(--dark);color:#fff;overflow-x:hidden}
+
+    /* HERO */
+    .hero{
+      min-height:100vh;
+      background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      text-align:center;padding:2rem;position:relative;overflow:hidden;
+    }
+    .hero::before{
+      content:'';position:absolute;width:600px;height:600px;
+      background:radial-gradient(circle,rgba(108,99,255,.25),transparent 70%);
+      top:-100px;left:-100px;animation:pulse 6s ease-in-out infinite;
+    }
+    .hero::after{
+      content:'';position:absolute;width:400px;height:400px;
+      background:radial-gradient(circle,rgba(255,101,132,.2),transparent 70%);
+      bottom:-80px;right:-80px;animation:pulse 8s ease-in-out infinite reverse;
+    }
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
+
+    .badge{
+      background:rgba(108,99,255,.25);border:1px solid var(--primary);
+      color:#c4bfff;padding:.4rem 1.2rem;border-radius:999px;
+      font-size:.85rem;letter-spacing:1px;margin-bottom:1.5rem;
+      animation:fadeUp .6s ease both;
+    }
+    .hero h1{
+      font-size:clamp(2.5rem,7vw,5rem);font-weight:900;line-height:1.1;
+      background:linear-gradient(135deg,#fff 30%,var(--accent));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+      animation:fadeUp .8s ease .2s both;
+    }
+    .hero h1 span{color:var(--secondary);-webkit-text-fill-color:var(--secondary)}
+    .hero p{
+      max-width:560px;margin:1.5rem auto;color:#aaa;font-size:1.15rem;line-height:1.7;
+      animation:fadeUp .8s ease .4s both;
+    }
+    .emoji-float{font-size:5rem;animation:float 3s ease-in-out infinite;margin-bottom:1rem}
+
+    .cta-group{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;animation:fadeUp .8s ease .6s both}
+    .btn-primary{
+      background:linear-gradient(135deg,var(--primary),#9b5de5);
+      color:#fff;padding:.9rem 2.2rem;border:none;border-radius:12px;
+      font-size:1.1rem;font-weight:700;cursor:pointer;text-decoration:none;
+      transition:transform .2s,box-shadow .2s;
+      box-shadow:0 4px 20px rgba(108,99,255,.4);
+    }
+    .btn-primary:hover{transform:translateY(-3px);box-shadow:0 8px 30px rgba(108,99,255,.6)}
+    .btn-wa{
+      background:linear-gradient(135deg,#25D366,#128C7E);
+      color:#fff;padding:.9rem 2.2rem;border:none;border-radius:12px;
+      font-size:1.1rem;font-weight:700;cursor:pointer;text-decoration:none;
+      transition:transform .2s,box-shadow .2s;
+      box-shadow:0 4px 20px rgba(37,211,102,.3);
+    }
+    .btn-wa:hover{transform:translateY(-3px);box-shadow:0 8px 30px rgba(37,211,102,.5)}
+
+    .price-pill{
+      margin-top:2rem;background:rgba(255,215,0,.12);
+      border:1px solid rgba(255,215,0,.4);border-radius:999px;
+      padding:.5rem 1.5rem;font-size:1rem;color:var(--accent);font-weight:600;
+      animation:fadeUp .8s ease .8s both;
+    }
+
+    /* FEATURES */
+    section{padding:5rem 2rem;max-width:1100px;margin:0 auto}
+    .section-title{text-align:center;font-size:2rem;font-weight:800;margin-bottom:.5rem}
+    .section-sub{text-align:center;color:#888;margin-bottom:3rem}
+
+    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem}
+    .card{
+      background:var(--card);border:1px solid rgba(255,255,255,.07);
+      border-radius:20px;padding:2rem;transition:transform .3s,border-color .3s;
+    }
+    .card:hover{transform:translateY(-6px);border-color:var(--primary)}
+    .card-icon{font-size:2.5rem;margin-bottom:1rem}
+    .card h3{font-size:1.1rem;margin-bottom:.5rem}
+    .card p{color:#888;font-size:.9rem;line-height:1.6}
+
+    /* HOW IT WORKS */
+    .steps{display:flex;flex-direction:column;gap:2rem;max-width:650px;margin:0 auto}
+    .step{display:flex;align-items:flex-start;gap:1.5rem}
+    .step-num{
+      min-width:48px;height:48px;border-radius:50%;
+      background:linear-gradient(135deg,var(--primary),#9b5de5);
+      display:flex;align-items:center;justify-content:center;
+      font-weight:900;font-size:1.2rem;flex-shrink:0;
+    }
+    .step-text h4{margin-bottom:.3rem;font-size:1rem;font-weight:700}
+    .step-text p{color:#888;font-size:.9rem}
+
+    /* PRICING */
+    .pricing-box{
+      background:linear-gradient(135deg,var(--card),#0f3460);
+      border:2px solid var(--primary);border-radius:24px;
+      padding:3rem;text-align:center;max-width:420px;margin:0 auto;
+      position:relative;overflow:hidden;
+    }
+    .pricing-box::before{
+      content:'⭐ MÁS POPULAR';position:absolute;top:18px;right:-30px;
+      background:var(--secondary);color:#fff;font-size:.75rem;font-weight:700;
+      padding:.3rem 3rem;transform:rotate(40deg);letter-spacing:1px;
+    }
+    .pricing-box .price{font-size:4rem;font-weight:900;color:var(--accent)}
+    .pricing-box .price span{font-size:1.2rem;color:#aaa}
+    .pricing-box ul{list-style:none;margin:1.5rem 0;text-align:left}
+    .pricing-box ul li{padding:.5rem 0;color:#ccc;font-size:.95rem}
+    .pricing-box ul li::before{content:'✅ ';margin-right:.3rem}
+
+    /* TESTIMONIOS */
+    .testimonios{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem}
+    .test-card{
+      background:var(--card);border:1px solid rgba(255,255,255,.07);
+      border-radius:16px;padding:1.5rem;
+    }
+    .stars{color:var(--accent);font-size:1.1rem;margin-bottom:.8rem}
+    .test-card p{color:#ccc;font-size:.9rem;line-height:1.6;font-style:italic}
+    .test-author{margin-top:1rem;font-weight:700;font-size:.85rem;color:#aaa}
+
+    /* CTA FINAL */
+    .cta-final{
+      background:linear-gradient(135deg,rgba(108,99,255,.15),rgba(255,101,132,.1));
+      border:1px solid rgba(108,99,255,.3);border-radius:24px;
+      padding:4rem 2rem;text-align:center;
+    }
+    .cta-final h2{font-size:2.2rem;font-weight:900;margin-bottom:1rem}
+    .cta-final p{color:#aaa;margin-bottom:2rem;font-size:1rem}
+
+    /* FOOTER */
+    footer{text-align:center;padding:2rem;color:#555;font-size:.85rem;border-top:1px solid rgba(255,255,255,.05)}
+    footer a{color:var(--primary);text-decoration:none}
+
+    /* MOBILE */
+    @media(max-width:600px){
+      .hero h1{font-size:2.4rem}
+      .cta-group{flex-direction:column;align-items:center}
+      .btn-primary,.btn-wa{width:100%;text-align:center}
+    }
+  </style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="badge">🎮 JUEGO EDUCATIVO PARA NIÑOS</div>
+  <div class="emoji-float">🗺️</div>
+  <h1>Aprende las Tablas<br><span>¡Jugando!</span></h1>
+  <p>AventuraTablas convierte las matemáticas en una épica aventura. Tu hijo avanza de nivel mientras domina las tablas de multiplicar sin darse cuenta.</p>
+  <div class="cta-group">
+    <a href="https://wa.me/526331124596?text=Hola,%20quiero%20info%20sobre%20AventuraTablas%20Pro"
+       class="btn-wa" target="_blank">💬 Quiero la Membresía</a>
+    <a href="mailto:dasoto88122911@gmail.com" class="btn-primary">✉️ Escribir al Equipo</a>
+  </div>
+  <div class="price-pill">🔥 Solo $99 pesos al mes · Cancela cuando quieras</div>
+</div>
+
+<!-- FEATURES -->
+<section>
+  <p class="section-title">¿Por qué AventuraTablas?</p>
+  <p class="section-sub">Diseñado para que aprender sea la parte favorita del día</p>
+  <div class="cards">
+    <div class="card">
+      <div class="card-icon">🎯</div>
+      <h3>Aprendizaje Real</h3>
+      <p>Refuerzo espaciado y gamificación para que las tablas queden grabadas de verdad.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🏆</div>
+      <h3>Sistema de Logros</h3>
+      <p>Medallas, trofeos y recompensas que motivan a seguir jugando cada día.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📊</div>
+      <h3>Progreso en Tiempo Real</h3>
+      <p>Los papás ven exactamente cuánto avanza su hijo y qué tablas domina.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📱</div>
+      <h3>En Cualquier Dispositivo</h3>
+      <p>Funciona en celular, tablet y computadora. Sin descargas, desde el navegador.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🛡️</div>
+      <h3>100% Seguro para Niños</h3>
+      <p>Sin anuncios, sin compras dentro del juego. Solo aprendizaje puro.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <h3>Resultados Rápidos</h3>
+      <p>La mayoría de los niños dominan todas las tablas en menos de 4 semanas.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section style="background:rgba(255,255,255,.02);border-radius:24px;padding:4rem 2rem;max-width:1100px;margin:0 auto">
+  <p class="section-title">¿Cómo funciona?</p>
+  <p class="section-sub">3 pasos y tu hijo ya está jugando</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">
+        <h4>Elige tu membresía</h4>
+        <p>Solo $99/mes. Sin contratos. Cancela cuando quieras desde WhatsApp.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">
+        <h4>Recibe tus accesos</h4>
+        <p>En minutos te enviamos usuario y contraseña al correo o WhatsApp.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">
+        <h4>¡A jugar y aprender!</h4>
+        <p>Tu hijo entra al juego, elige su personaje y la aventura comienza.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section>
+  <p class="section-title">Precio claro, sin sorpresas</p>
+  <p class="section-sub">Un solo plan que incluye todo</p>
+  <div class="pricing-box">
+    <div class="price">$99 <span>/mes</span></div>
+    <p style="color:#aaa;margin:.5rem 0 1.5rem">Membresía Completa</p>
+    <ul>
+      <li>Acceso a todos los niveles del juego</li>
+      <li>Tablas del 1 al 12</li>
+      <li>Sistema de logros y trofeos</li>
+      <li>Reporte de progreso para papás</li>
+      <li>Soporte por WhatsApp</li>
+      <li>Actualizaciones sin costo extra</li>
+    </ul>
+    <a href="https://wa.me/526331124596?text=Hola,%20quiero%20activar%20mi%20membresía%20de%20AventuraTablas%20por%20$99"
+       class="btn-wa" target="_blank" style="display:block;margin-top:1rem">
+      💬 Activar por WhatsApp
+    </a>
+  </div>
+</section>
+
+<!-- TESTIMONIOS -->
+<section>
+  <p class="section-title">Lo que dicen los papás</p>
+  <p class="section-sub">Resultados reales de familias reales</p>
+  <div class="testimonios">
+    <div class="test-card">
+      <div class="stars">★★★★★</div>
+      <p>"Mi hija odiaba las matemáticas. Lleva 2 semanas en AventuraTablas y ya sabe las tablas del 1 al 6. No puedo creerlo."</p>
+      <div class="test-author">— Karla R., mamá de Sofía (7 años)</div>
+    </div>
+    <div class="test-card">
+      <div class="stars">★★★★★</div>
+      <p>"Antes batallábamos cada noche con las tablas. Ahora mi hijo pide él solo jugar. Vale cada peso."</p>
+      <div class="test-author">— Miguel A., papá de Diego (9 años)</div>
+    </div>
+    <div class="test-card">
+      <div class="stars">★★★★★</div>
+      <p>"En un mes mi hijo pasó de reprobar a sacar 10 en matemáticas. El maestro preguntó qué habíamos hecho diferente."</p>
+      <div class="test-author">— Laura M., mamá de Emilio (8 años)</div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA FINAL -->
+<section>
+  <div class="cta-final">
+    <h2>¿Tu hijo ya está listo para la aventura? 🚀</h2>
+    <p>Únete hoy por solo $99 al mes y mira cómo las matemáticas dejan de ser un problema.</p>
+    <div class="cta-group">
+      <a href="https://wa.me/526331124596?text=Hola,%20quiero%20activar%20AventuraTablas%20Pro"
+         class="btn-wa" target="_blank">💬 Escribir al WhatsApp</a>
+      <a href="mailto:dasoto88122911@gmail.com" class="btn-primary">✉️ Enviar Correo</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>© 2026 AventuraTablas Pro · Hecho con ❤️ para niños que aprenden jugando</p>
+  <p style="margin-top:.5rem">
+    <a href="https://wa.me/526331124596">WhatsApp: 633 112 4596</a> ·
+    <a href="mailto:dasoto88122911@gmail.com">dasoto88122911@gmail.com</a>
+  </p>
+</footer>
+
+</body>
+</html>
