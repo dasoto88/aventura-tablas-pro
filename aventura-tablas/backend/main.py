@@ -800,8 +800,11 @@ async def quest_subir_guia(
         elif any(ext in content_type.lower() for ext in ["jpeg", "jpg", "png", "webp", "image"]):
             mime = content_type if content_type else "image/jpeg"
             texto = extraer_texto_imagen(contenido, mime_type=mime)
+        elif "text" in content_type.lower() or archivo.filename.lower().endswith(".txt"):
+            # Texto pegado manualmente desde el frontend
+            texto = contenido.decode("utf-8", errors="ignore")
         else:
-            raise HTTPException(status_code=400, detail="Formato no soportado. Usa PDF, JPG o PNG")
+            raise HTTPException(status_code=400, detail="Formato no soportado. Usa PDF, JPG, PNG o pega el texto")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Error de configuracion IA: {str(e)}")
     except Exception as e:

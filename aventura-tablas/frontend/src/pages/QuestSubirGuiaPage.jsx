@@ -16,6 +16,8 @@ export default function QuestSubirGuiaPage() {
   });
   const [archivo, setArchivo] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [textoManual, setTextoManual] = useState("");
+  const [modoTexto, setModoTexto] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [resultado, setResultado] = useState(null);
   const fileRef = useRef();
@@ -33,7 +35,8 @@ export default function QuestSubirGuiaPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!archivo) { toast.error("Selecciona un archivo"); return; }
+    if (!modoTexto && !archivo) { toast.error("Selecciona un archivo o usa la opción de texto"); return; }
+    if (modoTexto && !textoManual.trim()) { toast.error("Escribe el contenido de la guía"); return; }
     if (!form.titulo) { toast.error("Ingresa un título"); return; }
 
     setCargando(true);
@@ -44,12 +47,18 @@ export default function QuestSubirGuiaPage() {
     fd.append("fecha_examen", form.fecha_examen);
     fd.append("dias_estudio", form.dias_estudio);
     fd.append("codigo_grupo", form.codigo_grupo);
-    fd.append("archivo", archivo);
+    if (modoTexto) {
+      // Crear archivo de texto desde el contenido manual
+      const blob = new Blob([textoManual], { type: "text/plain" });
+      fd.append("archivo", blob, "guia.txt");
+    } else {
+      fd.append("archivo", archivo);
+    }
 
     try {
       const res = await axios.post(`${API}/api/quest/subir-guia`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: 120000, // 2 min para IA
+        timeout: 120000,
       });
       setResultado(res.data);
       toast.success("¡Guía procesada exitosamente! 🎉");
@@ -140,7 +149,26 @@ export default function QuestSubirGuiaPage() {
             padding: "24px",
             display: "flex", flexDirection: "column", gap: "16px",
           }}>
+            {/* Selector modo: archivo o texto */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "4px" }}>
+              <button type="button"
+                onClick={() => setModoTexto(false)}
+                style={{ flex: 1, padding: "10px", borderRadius: "10px", border: "none", cursor: "pointer",
+                  background: !modoTexto ? "linear-gradient(135deg,#FFD700,#FF6B35)" : "rgba(255,255,255,0.08)",
+                  color: !modoTexto ? "#000" : "#aaa", fontWeight: "bold", fontSize: "0.9rem" }}>
+                📎 Subir PDF / Foto
+              </button>
+              <button type="button"
+                onClick={() => setModoTexto(true)}
+                style={{ flex: 1, padding: "10px", borderRadius: "10px", border: "none", cursor: "pointer",
+                  background: modoTexto ? "linear-gradient(135deg,#00f5ff,#0080ff)" : "rgba(255,255,255,0.08)",
+                  color: modoTexto ? "#000" : "#aaa", fontWeight: "bold", fontSize: "0.9rem" }}>
+                ✏️ Pegar Texto
+              </button>
+            </div>
+
             {/* Zona de archivo */}
+            {!modoTexto ? (
             <div
               onClick={() => fileRef.current?.click()}
               style={{
@@ -170,6 +198,25 @@ export default function QuestSubirGuiaPage() {
                 </div>
               )}
             </div>
+            ) : (
+            <div>
+              <textarea
+                value={textoManual}
+                onChange={e => setTextoManual(e.target.value)}
+                placeholder="Pega aquí el contenido de la guía de estudio... (puede ser el texto del libro, apuntes del maestro, temas del examen, etc.)"
+                style={{
+                  ...inputStyle,
+                  height: "180px",
+                  resize: "vertical",
+                  lineHeight: "1.5",
+                  fontSize: "0.9rem",
+                }}
+              />
+              <p style={{ color: "#aaa", fontSize: "0.78rem", marginTop: "4px" }}>
+                💡 Copia el texto de la guía, apuntes o temas a estudiar
+              </p>
+            </div>
+            )}
 
             <div>
               <label style={labelStyle}>Título de la guía *</label>
