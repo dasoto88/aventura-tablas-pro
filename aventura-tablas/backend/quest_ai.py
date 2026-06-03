@@ -1,237 +1,148 @@
 """
-Quest Escolar — Módulo IA con Groq (100% gratuito, sin tarjeta de crédito)
-Extrae texto de PDFs/imágenes y genera preguntas educativas para primaria.
-Groq free tier: 14,400 requests/día, super rápido.
+Quest Escolar — Módulo IA con OpenRouter (gratis)
+Modelos gratuitos: Llama 3.3 70B para texto, Llama Vision para imágenes.
 """
-import os
-import json
-import base64
-import re
-from pathlib import Path
+import os, json, base64, re, io
 
 try:
-    from groq import Groq
-    GROQ_DISPONIBLE = True
+    from openai import OpenAI
+    OPENAI_SDK = True
 except ImportError:
-    GROQ_DISPONIBLE = False
+    OPENAI_SDK = False
 
-# Para extraer texto de PDFs sin IA
 try:
     import PyPDF2
-    import io
-    PDF_DISPONIBLE = True
+    PDF_OK = True
 except ImportError:
-    PDF_DISPONIBLE = False
+    PDF_OK = False
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
-# Modelos disponibles en Groq free tier
-MODELO_TEXTO    = "llama-3.3-70b-versatile"   # Para generar preguntas (muy bueno)
-MODELO_VISION   = "meta-llama/llama-4-scout-17b-16e-instruct"  # Para leer imágenes
+MODELO_TEXTO  = "meta-llama/llama-3.3-70b-instruct:free"
+MODELO_VISION = "meta-llama/llama-3.2-11b-vision-instruct:free"
 
 
 def _cliente():
-    """Retorna cliente Groq configurado."""
-    if not GROQ_DISPONIBLE:
-        raise ValueError("groq no instalado. Ejecuta: pip install groq")
-    if not GROQ_API_KEY:
-        raise ValueError("GROQ_API_KEY no configurada en las variables de entorno")
-    return Groq(api_key=GROQ_API_KEY)
+    if not OPENAI_SDK:
+        raise ValueError("Instala: pip install openai")
+    if not OPENROUTER_KEY:
+        raise ValueError("OPENROUTER_API_KEY no configurada en Render")
+    return OpenAI(
+        api_key=OPENROUTER_KEY,
+        base_url="https://openrouter.ai/api/v1",
+    )
 
 
 def extraer_texto_pdf(pdf_bytes: bytes) -> str:
-    """
-    Extrae texto de un PDF.
-    Primero intenta extracción directa (PyPDF2), si falla usa Groq Vision.
-    """
-    # Método 1: Extracción directa (más rápido, sin IA)
-    if PDF_DISPONIBLE:
+    if PDF_OK:
         try:
             reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
-            texto = ""
-            for page in reader.pages:
-                t = page.extract_text()
-                if t:
-                    texto += t + "\n"
-            if texto.strip() and len(texto.strip()) > 50:
+            texto = "\n".join(p.extract_text() or "" for p in reader.pages)
+            if texto.strip():
                 return texto.strip()
         except Exception:
             pass
-
-    # Método 2: Groq Vision (para PDFs escaneados o con imágenes)
-    return extraer_texto_imagen(pdf_bytes, "image/jpeg")
+    return extraer_texto_imagen(pdf_bytes)
 
 
 def extraer_texto_imagen(imagen_bytes: bytes, mime_type: str = "image/jpeg") -> str:
-    """
-    Extrae texto de una imagen (foto de guía de estudio) usando Groq Vision.
-    Soporta: image/jpeg, image/png, image/webp
-    """
     cliente = _cliente()
-    img_b64 = base64.b64encode(imagen_bytes).decode("utf-8")
-
-    # Asegurar formato correcto del mime_type
     if "pdf" in mime_type:
         mime_type = "image/jpeg"
-
-    respuesta = cliente.chat.completions.create(
+    img_b64 = base64.b64encode(imagen_bytes).decode()
+    resp = cliente.chat.completions.create(
         model=MODELO_VISION,
-        messages=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}
-                },
-                {
-                    "type": "text",
-                    "text": (
-                        "Esta es una foto o imagen de una guía de estudio escolar para niños de primaria. "
-                        "Extrae TODO el texto que puedas leer en la imagen de forma precisa. "
-                        "Mantén la estructura: títulos, subtítulos, preguntas, listas, párrafos. "
-                        "Si hay texto ilegible escribe [ilegible]. "
-                        "Solo devuelve el texto extraído, sin comentarios adicionales."
-                    )
-                }
-            ]
-        }],
+        messages=[{"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
+            {"type": "text", "text": "Extrae TODO el texto de esta guía escolar. Solo el texto, sin comentarios."}
+        ]}],
         max_tokens=4096,
-        temperature=0.1,
     )
-    return respuesta.choices[0].message.content.strip()
+    return resp.choices[0].message.content.strip()
 
 
 def generar_plan_estudio(texto: str, dias: int = 5, materia: str = "", nivel: str = "primaria") -> dict:
-    """
-    Dado el texto de una guía, genera un plan de estudio dividido en días
-    con preguntas para cada día. Retorna JSON estructurado.
-    """
     cliente = _cliente()
+    prompt = f"""Eres un maestro de educación primaria. Crea un plan de estudio para niños de 6-12 años.
 
-    prompt = f"""Eres un maestro experto en educación primaria ({nivel}).
-Tu tarea es crear un plan de estudio para un niño de 6-12 años a partir de este contenido de guía escolar.
-
-CONTENIDO DE LA GUÍA:
----
-{texto[:6000]}
----
+CONTENIDO:
+{texto[:5000]}
 
 INSTRUCCIONES:
-1. Divide el contenido en exactamente {dias} partes (una para cada día de estudio)
-2. Para CADA día genera exactamente 10 preguntas variadas:
-   - 6 preguntas de opción múltiple (4 opciones: a, b, c, d)
-   - 2 preguntas de verdadero o falso (opcion_a = "Verdadero", opcion_b = "Falso", opcion_c = "No sé", opcion_d = "")
-   - 2 preguntas de completar el espacio (opcion_a = respuesta correcta, opcion_b y opcion_c = distractores, opcion_d = "")
-3. Usa lenguaje SIMPLE y DIVERTIDO para niños de primaria
-4. Las preguntas deben ser claras y directas
-5. Incluye una explicación corta de por qué cada respuesta es correcta
-6. Materia: {materia if materia else 'detectar automáticamente del contenido'}
+- Divide en exactamente {dias} días de estudio
+- Cada día: 10 preguntas (6 opción múltiple, 2 verdadero/falso, 2 completar)
+- Lenguaje simple y divertido para niños
+- Materia: {materia or 'detectar del contenido'}
 
-RESPONDE ÚNICAMENTE con un JSON válido con esta estructura exacta (sin texto antes ni después):
+Responde SOLO con JSON válido:
 {{
-  "titulo": "Título de la guía",
-  "materia": "Nombre de la materia",
-  "resumen_general": "Breve descripción de lo que aprenderá el niño en 1-2 oraciones",
-  "dias": [
-    {{
-      "dia": 1,
-      "titulo": "Tema del Día 1",
-      "resumen": "Resumen del contenido del día en 2-3 oraciones simples para niños",
-      "conceptos_clave": ["concepto1", "concepto2", "concepto3"],
-      "preguntas": [
-        {{
-          "tipo": "opcion_multiple",
-          "pregunta": "¿Pregunta aquí?",
-          "opcion_a": "Primera opción",
-          "opcion_b": "Segunda opción",
-          "opcion_c": "Tercera opción",
-          "opcion_d": "Cuarta opción",
-          "respuesta_correcta": "a",
-          "explicacion": "Porque...",
-          "dificultad": 1
-        }}
-      ]
-    }}
-  ]
+  "titulo": "...",
+  "materia": "...",
+  "resumen_general": "...",
+  "dias": [{{
+    "dia": 1,
+    "titulo": "...",
+    "resumen": "...",
+    "conceptos_clave": ["..."],
+    "preguntas": [{{
+      "tipo": "opcion_multiple",
+      "pregunta": "...",
+      "opcion_a": "...", "opcion_b": "...", "opcion_c": "...", "opcion_d": "...",
+      "respuesta_correcta": "a",
+      "explicacion": "...",
+      "dificultad": 1
+    }}]
+  }}]
 }}"""
 
-    respuesta = cliente.chat.completions.create(
+    resp = cliente.chat.completions.create(
         model=MODELO_TEXTO,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=8192,
         temperature=0.3,
-        response_format={"type": "json_object"},
     )
-
-    texto_respuesta = respuesta.choices[0].message.content.strip()
-
-    # Limpiar marcadores de código si los hay
-    texto_respuesta = re.sub(r'^```json\s*', '', texto_respuesta)
-    texto_respuesta = re.sub(r'^```\s*', '', texto_respuesta)
-    texto_respuesta = re.sub(r'\s*```$', '', texto_respuesta)
+    txt = resp.choices[0].message.content.strip()
+    txt = re.sub(r'^```json\s*|^```\s*|\s*```$', '', txt, flags=re.MULTILINE)
 
     try:
-        data = json.loads(texto_respuesta)
+        data = json.loads(txt)
     except json.JSONDecodeError:
-        match = re.search(r'\{[\s\S]+\}', texto_respuesta)
-        if match:
-            data = json.loads(match.group())
+        m = re.search(r'\{[\s\S]+\}', txt)
+        if m:
+            data = json.loads(m.group())
         else:
-            raise ValueError(f"Groq no retornó JSON válido: {texto_respuesta[:300]}")
+            raise ValueError(f"IA no retornó JSON válido: {txt[:200]}")
 
     if "dias" not in data:
-        raise ValueError("Respuesta de Groq sin campo 'dias'")
-
+        raise ValueError("Respuesta sin campo 'dias'")
     return data
 
 
 def generar_resumen_dia(texto_dia: str, nombre_alumno: str = "amigo") -> str:
-    """
-    Genera un resumen interactivo y divertido del contenido del día.
-    """
     cliente = _cliente()
-
-    respuesta = cliente.chat.completions.create(
+    resp = cliente.chat.completions.create(
         model=MODELO_TEXTO,
-        messages=[{
-            "role": "user",
-            "content": f"""Eres un maestro súper divertido que le explica a {nombre_alumno} el siguiente tema escolar.
-
-CONTENIDO:
-{texto_dia[:2000]}
-
-INSTRUCCIONES:
-- Explica el tema de forma divertida y simple para un niño de primaria
-- Usa emojis para hacer el texto más visual
-- Divide en 3-5 puntos clave con títulos llamativos
-- Usa ejemplos de la vida cotidiana de los niños
-- Máximo 250 palabras
-- Termina con una frase motivacional corta
-
-Responde solo con el texto explicativo."""
-        }],
-        max_tokens=1024,
+        messages=[{"role": "user", "content": f"""Eres un maestro divertido explicando a {nombre_alumno}.
+Contenido: {texto_dia[:2000]}
+Explica el tema con emojis, 3-5 puntos clave, ejemplos para niños, máximo 250 palabras.
+Termina con una frase motivacional. Solo el texto, sin JSON."""}],
+        max_tokens=800,
         temperature=0.5,
     )
-    return respuesta.choices[0].message.content.strip()
+    return resp.choices[0].message.content.strip()
 
 
 def validar_configuracion() -> dict:
-    """Verifica que Groq esté configurado correctamente."""
-    if not GROQ_DISPONIBLE:
-        return {"ok": False, "error": "Librería 'groq' no instalada. Ejecuta: pip install groq"}
-    if not GROQ_API_KEY:
-        return {"ok": False, "error": "GROQ_API_KEY no está configurada en las variables de entorno"}
+    if not OPENAI_SDK:
+        return {"ok": False, "error": "Instala: pip install openai"}
+    if not OPENROUTER_KEY:
+        return {"ok": False, "error": "OPENROUTER_API_KEY no configurada"}
     try:
-        cliente = _cliente()
-        resp = cliente.chat.completions.create(
+        resp = _cliente().chat.completions.create(
             model=MODELO_TEXTO,
-            messages=[{"role": "user", "content": "Responde solo la palabra: OK"}],
-            max_tokens=10,
+            messages=[{"role": "user", "content": "Di solo: OK"}],
+            max_tokens=5,
         )
-        texto = resp.choices[0].message.content.strip()
-        if texto:
-            return {"ok": True, "modelo": MODELO_TEXTO, "respuesta": texto}
-        return {"ok": False, "error": "Respuesta vacía de Groq"}
+        return {"ok": True, "modelo": MODELO_TEXTO, "respuesta": resp.choices[0].message.content}
     except Exception as e:
         return {"ok": False, "error": str(e)}
