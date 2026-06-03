@@ -19,7 +19,7 @@ except ImportError:
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 MODELO_TEXTO  = "meta-llama/llama-3.3-70b-instruct:free"
-MODELO_VISION = "google/gemini-2.0-flash-exp:free"  # soporta imágenes y PDFs
+MODELO_VISION = "qwen/qwen2.5-vl-7b-instruct:free"  # visión gratuito
 
 
 def _cliente():
@@ -50,15 +50,34 @@ def extraer_texto_imagen(imagen_bytes: bytes, mime_type: str = "image/jpeg") -> 
     if "pdf" in mime_type:
         mime_type = "image/jpeg"
     img_b64 = base64.b64encode(imagen_bytes).decode()
-    resp = cliente.chat.completions.create(
-        model=MODELO_VISION,
-        messages=[{"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
-            {"type": "text", "text": "Extrae TODO el texto de esta guía escolar. Solo el texto, sin comentarios."}
-        ]}],
-        max_tokens=4096,
+
+    # Intentar con varios modelos de visión hasta que uno funcione
+    modelos_vision = [
+        "qwen/qwen2.5-vl-7b-instruct:free",
+        "qwen/qwen2-vl-7b-instruct:free",
+        "meta-llama/llama-3.2-11b-vision-instruct",
+    ]
+    ultimo_error = None
+    for modelo in modelos_vision:
+        try:
+            resp = cliente.chat.completions.create(
+                model=modelo,
+                messages=[{"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{img_b64}"}},
+                    {"type": "text", "text": "Extrae TODO el texto de esta guía escolar. Solo el texto, sin comentarios."}
+                ]}],
+                max_tokens=4096,
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception as e:
+            ultimo_error = e
+            continue
+
+    raise ValueError(
+        "No se pudo leer la imagen automáticamente. "
+        "Por favor sube un PDF de texto o escribe el contenido manualmente. "
+        f"(Error: {ultimo_error})"
     )
-    return resp.choices[0].message.content.strip()
 
 
 def generar_plan_estudio(texto: str, dias: int = 5, materia: str = "", nivel: str = "primaria") -> dict:
