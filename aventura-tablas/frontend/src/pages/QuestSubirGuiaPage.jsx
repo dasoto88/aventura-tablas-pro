@@ -181,7 +181,7 @@ export default function QuestSubirGuiaPage() {
                 transition: "all 0.2s",
               }}
             >
-              <input ref={fileRef} type="file" accept=".pdf,image/*"
+              <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,image/*"
                      onChange={handleFile} style={{ display: "none" }} />
               {preview ? (
                 <img src={preview} alt="preview" style={{ maxHeight: "120px", borderRadius: "8px" }} />
@@ -194,7 +194,7 @@ export default function QuestSubirGuiaPage() {
                 <div>
                   <div style={{ fontSize: "40px", marginBottom: "8px" }}>📎</div>
                   <p style={{ color: "#FFD700", fontWeight: "bold" }}>Toca para subir PDF o foto</p>
-                  <p style={{ color: "#aaa", fontSize: "0.8rem" }}>PDF, JPG, PNG — máx 10MB</p>
+                  <p style={{ color: "#aaa", fontSize: "0.8rem" }}>PDF, Word (.docx), JPG, PNG — máx 10MB</p>
                 </div>
               )}
             </div>

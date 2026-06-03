@@ -9,14 +9,22 @@ const VIDAS_INIT = 3;
 const PREGUNTAS_PARA_BOSS = 10;
 const TIEMPO_POR_PREGUNTA = 30;
 
-// 5 mundos del Quest (uno por día)
-const MUNDOS_QUEST = [
-  { nombre:"Torre del Saber",         emoji:"🏰", color:"#8E44AD", boss:"Guardián de Piedra", bossEmoji:"🗿" },
-  { nombre:"Bosque Encantado",         emoji:"🌲", color:"#27AE60", boss:"Lobo Sabio",         bossEmoji:"🐺" },
-  { nombre:"Volcán del Conocimiento",  emoji:"🌋", color:"#E74C3C", boss:"Dragón Erudito",     bossEmoji:"🐉" },
-  { nombre:"Castillo de las Estrellas",emoji:"⭐", color:"#F39C12", boss:"Rey Oscuro",          bossEmoji:"👑" },
-  { nombre:"Gran Torneo Final",        emoji:"🏆", color:"#3498DB", boss:"El Gran Maestro",    bossEmoji:"🧙" },
+// Banco de mundos — se asigna uno por día automáticamente (sin "mundo final" fijo)
+const BANCO_MUNDOS = [
+  { nombre:"Torre del Saber",          emoji:"🏰", color:"#8E44AD", boss:"Guardián de Piedra", bossEmoji:"🗿" },
+  { nombre:"Bosque Encantado",          emoji:"🌲", color:"#27AE60", boss:"Lobo Sabio",          bossEmoji:"🐺" },
+  { nombre:"Volcán del Conocimiento",   emoji:"🌋", color:"#E74C3C", boss:"Dragón Erudito",      bossEmoji:"🐉" },
+  { nombre:"Castillo de las Estrellas", emoji:"⭐", color:"#F39C12", boss:"Rey Oscuro",           bossEmoji:"👑" },
+  { nombre:"Caverna de Cristal",        emoji:"💎", color:"#1ABC9C", boss:"Araña Gigante",        bossEmoji:"🕷️" },
+  { nombre:"Templo del Conocimiento",   emoji:"🏛️", color:"#E67E22", boss:"Espíritu Antiguo",    bossEmoji:"👻" },
+  { nombre:"Dimensión Estelar",         emoji:"🌌", color:"#2980B9", boss:"Alien Sabio",          bossEmoji:"👽" },
+  { nombre:"Selva Misteriosa",          emoji:"🌿", color:"#16A085", boss:"Jaguar Ancestral",     bossEmoji:"🐆" },
+  { nombre:"Montaña de Hielo",          emoji:"🏔️", color:"#85C1E9", boss:"Oso Polar Guardián",  bossEmoji:"🐻‍❄️" },
+  { nombre:"Ciudad del Futuro",         emoji:"🤖", color:"#8E44AD", boss:"Robot Maestro",        bossEmoji:"🤖" },
 ];
+
+// Obtiene el mundo para el día indicado (cíclico si hay más días que mundos)
+const getMundoDia = (dia) => BANCO_MUNDOS[(dia - 1) % BANCO_MUNDOS.length];
 
 export default function QuestJuegoPage() {
   const {

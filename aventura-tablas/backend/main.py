@@ -795,16 +795,18 @@ async def quest_subir_guia(
 
     # Extraer texto segun tipo de archivo
     try:
-        if "pdf" in content_type.lower() or archivo.filename.lower().endswith(".pdf"):
+        fname = archivo.filename.lower()
+        if "pdf" in content_type.lower() or fname.endswith(".pdf"):
             texto = extraer_texto_pdf(contenido)
+        elif fname.endswith(".docx") or fname.endswith(".doc") or "word" in content_type.lower() or "officedocument" in content_type.lower():
+            texto = extraer_texto_word(contenido)
         elif any(ext in content_type.lower() for ext in ["jpeg", "jpg", "png", "webp", "image"]):
             mime = content_type if content_type else "image/jpeg"
             texto = extraer_texto_imagen(contenido, mime_type=mime)
-        elif "text" in content_type.lower() or archivo.filename.lower().endswith(".txt"):
-            # Texto pegado manualmente desde el frontend
+        elif "text" in content_type.lower() or fname.endswith(".txt"):
             texto = contenido.decode("utf-8", errors="ignore")
         else:
-            raise HTTPException(status_code=400, detail="Formato no soportado. Usa PDF, JPG, PNG o pega el texto")
+            raise HTTPException(status_code=400, detail="Formato no soportado. Usa PDF, Word (.docx), o la opción Pegar Texto")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Error de configuracion IA: {str(e)}")
     except Exception as e:
