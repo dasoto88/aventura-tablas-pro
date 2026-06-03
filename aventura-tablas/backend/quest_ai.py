@@ -19,7 +19,7 @@ except ImportError:
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 MODELO_TEXTO  = "meta-llama/llama-3.3-70b-instruct:free"
-MODELO_VISION = "meta-llama/llama-3.2-11b-vision-instruct:free"
+MODELO_VISION = "google/gemini-2.0-flash-exp:free"  # soporta imágenes y PDFs
 
 
 def _cliente():
