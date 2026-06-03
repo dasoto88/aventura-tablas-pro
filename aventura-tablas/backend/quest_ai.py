@@ -47,57 +47,77 @@ def extraer_texto_word(docx_bytes: bytes) -> str:
         raise ValueError(f"No se pudo leer el archivo Word. Guárdalo como PDF o copia el texto. ({e})")
 
 
-def _mejorar_imagen_para_ocr(img):
-    """Mejora la imagen para OCR: escala de grises, contraste, nitidez."""
-    from PIL import ImageEnhance, ImageFilter
-    if img.mode not in ("RGB", "L"):
-        img = img.convert("RGB")
-    img = img.convert("L")                          # Escala de grises
-    img = ImageEnhance.Contrast(img).enhance(2.0)  # Más contraste
-    img = img.filter(ImageFilter.SHARPEN)           # Más nitidez
-    if img.width < 1500:                            # Escalar si es pequeña
-        factor = 1500 / img.width
-        img = img.resize((int(img.width * factor), int(img.height * factor)))
-    return img
-
-
 def extraer_texto_imagen(imagen_bytes: bytes, mime_type: str = "image/jpeg") -> str:
     """
-    Extrae texto de imagen/foto usando OCR (pytesseract + mejora automática).
-    Si pytesseract no está instalado, devuelve error claro.
+    Extrae texto de imagen/foto usando OCR.space API (gratis, sin instalación).
+    Soporta JPG, PNG, BMP — detecta español e inglés automáticamente.
     """
-    from PIL import Image
+    import urllib.request
+    import urllib.parse
 
-    img = Image.open(io.BytesIO(imagen_bytes))
+    # OCR.space API — clave demo gratuita (500 fotos/día)
+    OCR_API_URL = "https://api.ocr.space/parse/image"
+    OCR_API_KEY = os.getenv("OCR_API_KEY", "helloworld")  # clave demo gratis
+
+    # Convertir imagen a base64
+    img_b64 = base64.b64encode(imagen_bytes).decode("utf-8")
+
+    # Detectar tipo de imagen para el data URI
+    if "png" in mime_type:
+        data_uri = f"data:image/png;base64,{img_b64}"
+    elif "pdf" in mime_type:
+        data_uri = f"data:application/pdf;base64,{img_b64}"
+    else:
+        data_uri = f"data:image/jpeg;base64,{img_b64}"
+
+    # Payload para OCR.space
+    payload = urllib.parse.urlencode({
+        "base64Image": data_uri,
+        "language":    "spa",          # Español primero
+        "isOverlayRequired": "false",
+        "detectOrientation": "true",
+        "scale": "true",
+        "OCREngine": "2",              # Motor 2 = más preciso para fotos
+        "apikey": OCR_API_KEY,
+    }).encode("utf-8")
 
     try:
-        import pytesseract
-        img_mejorada = _mejorar_imagen_para_ocr(img)
-        # Primer intento: modo párrafo
-        texto = pytesseract.image_to_string(img_mejorada, config="--oem 3 --psm 6 -l spa+eng")
-        if not texto.strip():
-            # Segundo intento: modo automático
-            texto = pytesseract.image_to_string(img_mejorada, config="--oem 3 --psm 3 -l spa+eng")
-        if texto.strip():
-            return texto.strip()
-        raise ValueError("No se encontró texto legible en la imagen. Asegúrate de que la foto tenga buena iluminación y el texto sea visible.")
-
-    except ImportError:
-        # Tesseract no instalado — intentar convertir imagen a PDF y leer
-        try:
-            pdf_buffer = io.BytesIO()
-            img.convert("RGB").save(pdf_buffer, format="PDF", resolution=200)
-            texto = extraer_texto_pdf(pdf_buffer.getvalue())
-            if texto.strip():
-                return texto
-        except Exception:
-            pass
-        raise ValueError(
-            "OCR no disponible. Usa la opción '✏️ Escribir / Pegar Texto' "
-            "para ingresar el contenido manualmente."
+        req = urllib.request.Request(
+            OCR_API_URL,
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST"
         )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resultado = json.loads(resp.read().decode("utf-8"))
+
+        # Verificar errores de la API
+        if resultado.get("IsErroredOnProcessing"):
+            error_msg = resultado.get("ErrorMessage", ["Error desconocido"])
+            if isinstance(error_msg, list):
+                error_msg = " ".join(error_msg)
+            raise ValueError(f"OCR falló: {error_msg}")
+
+        # Extraer texto de todas las páginas
+        paginas = resultado.get("ParsedResults", [])
+        textos = [p.get("ParsedText", "") for p in paginas if p.get("ParsedText")]
+        texto_final = "\n".join(textos).strip()
+
+        if not texto_final:
+            raise ValueError(
+                "No se encontró texto en la imagen. "
+                "Asegúrate de que la foto tenga buena iluminación y el texto sea claro."
+            )
+        return texto_final
+
+    except ValueError:
+        raise
     except Exception as e:
-        raise ValueError(f"Error al leer imagen: {e}. Intenta mejorar la iluminación o usa Pegar Texto.")
+        # Si OCR.space falla, dar instrucciones
+        raise ValueError(
+            f"No se pudo leer la imagen ({e}). "
+            "Opciones: (1) Toma la foto con más luz, (2) Usa la opción '✏️ Pegar Texto'."
+        )
 
 
 # ── Generador de preguntas INTERNO ─────────────────────────────
