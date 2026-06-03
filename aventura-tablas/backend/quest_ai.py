@@ -47,31 +47,57 @@ def extraer_texto_word(docx_bytes: bytes) -> str:
         raise ValueError(f"No se pudo leer el archivo Word. Guárdalo como PDF o copia el texto. ({e})")
 
 
+def _mejorar_imagen_para_ocr(img):
+    """Mejora la imagen para OCR: escala de grises, contraste, nitidez."""
+    from PIL import ImageEnhance, ImageFilter
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    img = img.convert("L")                          # Escala de grises
+    img = ImageEnhance.Contrast(img).enhance(2.0)  # Más contraste
+    img = img.filter(ImageFilter.SHARPEN)           # Más nitidez
+    if img.width < 1500:                            # Escalar si es pequeña
+        factor = 1500 / img.width
+        img = img.resize((int(img.width * factor), int(img.height * factor)))
+    return img
+
+
 def extraer_texto_imagen(imagen_bytes: bytes, mime_type: str = "image/jpeg") -> str:
     """
-    Intenta OCR con easyocr (si está instalado).
-    Si no, indica al usuario que use PDF o texto.
+    Extrae texto de imagen/foto usando OCR (pytesseract + mejora automática).
+    Si pytesseract no está instalado, devuelve error claro.
     """
-    try:
-        import easyocr
-        import numpy as np
-        from PIL import Image
-        img = Image.open(io.BytesIO(imagen_bytes))
-        img_array = np.array(img)
-        reader = easyocr.Reader(['es', 'en'], gpu=False, verbose=False)
-        resultado = reader.readtext(img_array, detail=0)
-        texto = " ".join(resultado)
-        if texto.strip():
-            return texto
-    except ImportError:
-        pass
-    except Exception as e:
-        pass
+    from PIL import Image
 
-    raise ValueError(
-        "Para subir imágenes/fotos necesitas la opción OCR. "
-        "Por favor usa un PDF de texto o la opción '✏️ Pegar Texto' para copiar el contenido manualmente."
-    )
+    img = Image.open(io.BytesIO(imagen_bytes))
+
+    try:
+        import pytesseract
+        img_mejorada = _mejorar_imagen_para_ocr(img)
+        # Primer intento: modo párrafo
+        texto = pytesseract.image_to_string(img_mejorada, config="--oem 3 --psm 6 -l spa+eng")
+        if not texto.strip():
+            # Segundo intento: modo automático
+            texto = pytesseract.image_to_string(img_mejorada, config="--oem 3 --psm 3 -l spa+eng")
+        if texto.strip():
+            return texto.strip()
+        raise ValueError("No se encontró texto legible en la imagen. Asegúrate de que la foto tenga buena iluminación y el texto sea visible.")
+
+    except ImportError:
+        # Tesseract no instalado — intentar convertir imagen a PDF y leer
+        try:
+            pdf_buffer = io.BytesIO()
+            img.convert("RGB").save(pdf_buffer, format="PDF", resolution=200)
+            texto = extraer_texto_pdf(pdf_buffer.getvalue())
+            if texto.strip():
+                return texto
+        except Exception:
+            pass
+        raise ValueError(
+            "OCR no disponible. Usa la opción '✏️ Escribir / Pegar Texto' "
+            "para ingresar el contenido manualmente."
+        )
+    except Exception as e:
+        raise ValueError(f"Error al leer imagen: {e}. Intenta mejorar la iluminación o usa Pegar Texto.")
 
 
 # ── Generador de preguntas INTERNO ─────────────────────────────
