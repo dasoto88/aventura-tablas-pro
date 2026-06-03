@@ -14,7 +14,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-MODEL_NAME = "gemini-1.5-flash"  # Gratuito: 15 RPM, 1M TPM
+MODEL_NAME = "gemini-2.0-flash"  # Gratuito: modelo más reciente y rápido
 
 
 def _get_model():
