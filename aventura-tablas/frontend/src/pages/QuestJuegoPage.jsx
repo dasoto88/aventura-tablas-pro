@@ -54,7 +54,7 @@ export default function QuestJuegoPage() {
   const bloqueado = useRef(false);
 
   const guiaId = questGuiaActual?.id;
-  const mundoData = MUNDOS_QUEST[(questDiaActual - 1) % MUNDOS_QUEST.length] || MUNDOS_QUEST[0];
+  const mundoData = getMundoDia(questDiaActual);
 
   useEffect(() => {
     if (!guiaId) { setPagina("quest_menu"); return; }
