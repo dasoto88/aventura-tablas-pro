@@ -757,6 +757,34 @@ async def importar_db(archivo: UploadFile = File(...)):
 #  QUEST ESCOLAR â€” SUBIR GUÃA + REPORTE PDF
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
+@app.post("/api/quest/extraer-texto")
+async def quest_extraer_texto(archivo: UploadFile = File(...)):
+    """
+    PASO 1: Solo extrae el texto del archivo (PDF, Word, imagen, txt).
+    Retorna el texto para que el usuario lo revise y edite antes de generar preguntas.
+    """
+    contenido = await archivo.read()
+    content_type = archivo.content_type or ""
+    fname = archivo.filename.lower()
+    try:
+        from quest_ai import extraer_texto_pdf, extraer_texto_word, extraer_texto_imagen
+        if "pdf" in content_type.lower() or fname.endswith(".pdf"):
+            texto = extraer_texto_pdf(contenido)
+        elif fname.endswith(".docx") or fname.endswith(".doc") or "word" in content_type.lower() or "officedocument" in content_type.lower():
+            texto = extraer_texto_word(contenido)
+        elif any(ext in content_type.lower() for ext in ["jpeg","jpg","png","webp","image"]):
+            texto = extraer_texto_imagen(contenido, content_type if content_type else "image/jpeg")
+        elif "text" in content_type.lower() or fname.endswith(".txt"):
+            texto = contenido.decode("utf-8", errors="ignore")
+        else:
+            raise HTTPException(400, "Formato no soportado. Usa PDF, Word, JPG o PNG.")
+        return {"ok": True, "texto": texto, "caracteres": len(texto)}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Error al extraer texto: {e}")
+
+
 @app.post("/api/quest/subir-guia")
 async def quest_subir_guia(
     licencia: str = Form(...),
