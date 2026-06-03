@@ -764,21 +764,32 @@ async def quest_extraer_texto(archivo: UploadFile = File(...)):
     Retorna el texto para que el usuario lo revise y edite antes de generar preguntas.
     """
     contenido = await archivo.read()
-    content_type = archivo.content_type or ""
-    fname = archivo.filename.lower()
+    ct = (archivo.content_type or "").lower()
+    fname = (archivo.filename or "").lower()
     try:
         from quest_ai import extraer_texto_pdf, extraer_texto_word, extraer_texto_imagen
-        if "pdf" in content_type.lower() or fname.endswith(".pdf"):
+        if fname.endswith(".pdf") or "pdf" in ct:
             texto = extraer_texto_pdf(contenido)
-        elif fname.endswith(".docx") or fname.endswith(".doc") or "word" in content_type.lower() or "officedocument" in content_type.lower():
+        elif fname.endswith((".docx",".doc")) or "word" in ct or "officedocument" in ct:
             texto = extraer_texto_word(contenido)
-        elif any(ext in content_type.lower() for ext in ["jpeg","jpg","png","webp","image"]):
-            texto = extraer_texto_imagen(contenido, content_type if content_type else "image/jpeg")
-        elif "text" in content_type.lower() or fname.endswith(".txt"):
+        elif fname.endswith((".jpg",".jpeg",".png",".webp")) or any(x in ct for x in ["jpeg","jpg","png","webp","image"]):
+            try:
+                texto = extraer_texto_imagen(contenido, archivo.content_type or "image/jpeg")
+            except Exception:
+                raise HTTPException(400, (
+                    "⚠️ No se puede leer la imagen automáticamente. "
+                    "Opciones: (1) Convierte la foto a PDF, "
+                    "(2) Usa '✏️ Escribir / Pegar Texto' y escribe el contenido manualmente."
+                ))
+        elif fname.endswith(".txt") or "text" in ct:
             texto = contenido.decode("utf-8", errors="ignore")
         else:
-            raise HTTPException(400, "Formato no soportado. Usa PDF, Word, JPG o PNG.")
+            texto = contenido.decode("utf-8", errors="ignore")
+            if not texto.strip():
+                raise HTTPException(400, "Formato no reconocido. Usa PDF, Word (.docx) o Pegar Texto.")
         return {"ok": True, "texto": texto, "caracteres": len(texto)}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
@@ -815,26 +826,41 @@ async def quest_subir_guia(
     contenido = await archivo.read()
     content_type = archivo.content_type or ""
 
-    # Importacion lazy para no fallar si GEMINI_API_KEY no esta
     try:
-        from quest_ai import extraer_texto_pdf, extraer_texto_imagen, generar_plan_estudio
-    except ImportError:
-        raise HTTPException(status_code=500, detail="Modulo quest_ai no encontrado")
+        from quest_ai import (extraer_texto_pdf, extraer_texto_imagen,
+                               extraer_texto_word, generar_plan_estudio)
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Modulo quest_ai no encontrado: {e}")
 
     # Extraer texto segun tipo de archivo
     try:
-        fname = archivo.filename.lower()
-        if "pdf" in content_type.lower() or fname.endswith(".pdf"):
+        fname = (archivo.filename or "").lower()
+        ct = content_type.lower()
+        if fname.endswith(".pdf") or "pdf" in ct:
             texto = extraer_texto_pdf(contenido)
-        elif fname.endswith(".docx") or fname.endswith(".doc") or "word" in content_type.lower() or "officedocument" in content_type.lower():
+        elif fname.endswith(".docx") or fname.endswith(".doc") or "word" in ct or "officedocument" in ct:
             texto = extraer_texto_word(contenido)
-        elif any(ext in content_type.lower() for ext in ["jpeg", "jpg", "png", "webp", "image"]):
-            mime = content_type if content_type else "image/jpeg"
-            texto = extraer_texto_imagen(contenido, mime_type=mime)
-        elif "text" in content_type.lower() or fname.endswith(".txt"):
+        elif fname.endswith((".jpg",".jpeg",".png",".webp")) or any(x in ct for x in ["jpeg","jpg","png","webp","image"]):
+            # Intentar OCR — si no está disponible, dar instrucciones claras
+            try:
+                texto = extraer_texto_imagen(contenido, content_type if content_type else "image/jpeg")
+            except Exception:
+                raise HTTPException(status_code=400, detail=(
+                    "⚠️ Las imágenes/fotos no se pueden leer automáticamente. "
+                    "Opciones: (1) Convierte la foto a PDF y súbela, "
+                    "(2) Usa el botón '✏️ Escribir / Pegar Texto' y copia el contenido manualmente."
+                ))
+        elif fname.endswith(".txt") or "text" in ct or not fname:
+            # Texto plano o blob del frontend
             texto = contenido.decode("utf-8", errors="ignore")
         else:
-            raise HTTPException(status_code=400, detail="Formato no soportado. Usa PDF, Word (.docx), o la opción Pegar Texto")
+            # Último intento: decodificar como texto
+            try:
+                texto = contenido.decode("utf-8", errors="ignore")
+                if not texto.strip():
+                    raise ValueError("vacío")
+            except Exception:
+                raise HTTPException(status_code=400, detail="Formato no soportado. Usa PDF, Word (.docx) o la opción Pegar Texto")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Error de configuracion IA: {str(e)}")
     except Exception as e:
